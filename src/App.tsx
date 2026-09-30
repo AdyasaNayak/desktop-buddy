@@ -12,6 +12,9 @@ declare global {
       moveWindow: (x: number, y: number) => void;
       sleepWindow: (duration: number) => void;
       exitApp: () => void;
+      scheduleReminder: (id: number, text: string, remindAt: number) => void;
+      cancelReminder: (id: number) => void;
+      onReminder: (callback: (id: number) => void) => () => void;
     };
   }
 }
@@ -53,30 +56,43 @@ export default function App() {
     let active = true;
     const loadReminders = async () => {
       const saved = await db.reminders.orderBy("remindAt").toArray();
-      if (active) setReminders(saved);
+      if (active) {
+        setReminders(saved);
+        for (const reminder of saved) {
+          if (reminder.id !== undefined && !reminder.notified) {
+            window.desktopBuddy?.scheduleReminder(reminder.id, reminder.text, reminder.remindAt);
+          }
+        }
+      }
     };
     void loadReminders();
 
-    const checkReminders = window.setInterval(async () => {
-      const due = await db.reminders
-        .where("remindAt")
-        .belowOrEqual(Date.now())
-        .and((reminder) => !reminder.notified)
-        .toArray();
-      for (const reminder of due) {
-        if ("Notification" in window && Notification.permission === "granted") {
-          new Notification("Desktop Buddy reminder", { body: reminder.text });
-        } else {
-          window.alert(`Reminder: ${reminder.text}`);
-        }
-        await db.reminders.update(reminder.id!, { notified: true });
-      }
-      if (due.length > 0) void loadReminders();
-    }, 30000);
+    const unsubscribe = window.desktopBuddy?.onReminder((id) => {
+      void db.reminders.update(id, { notified: true }).then(() => loadReminders());
+    });
+    const checkReminders = window.desktopBuddy
+      ? undefined
+      : window.setInterval(async () => {
+          const due = await db.reminders
+            .where("remindAt")
+            .belowOrEqual(Date.now())
+            .and((reminder) => !reminder.notified)
+            .toArray();
+          for (const reminder of due) {
+            if ("Notification" in window && Notification.permission === "granted") {
+              new Notification("Desktop Buddy reminder", { body: reminder.text });
+            } else {
+              window.alert(`Reminder: ${reminder.text}`);
+            }
+            await db.reminders.update(reminder.id!, { notified: true });
+          }
+          if (due.length > 0) void loadReminders();
+        }, 30000);
 
     return () => {
       active = false;
-      window.clearInterval(checkReminders);
+      if (checkReminders) window.clearInterval(checkReminders);
+      unsubscribe?.();
     };
   }, []);
 
@@ -302,9 +318,11 @@ export default function App() {
     setReminderError("");
     try {
       await db.open();
-      await db.reminders.add({ text: reminderText.trim(), remindAt, notified: false });
+      const id = await db.reminders.add({ text: reminderText.trim(), remindAt, notified: false });
+      const savedReminder = { id, text: reminderText.trim(), remindAt };
+      window.desktopBuddy?.scheduleReminder(savedReminder.id, savedReminder.text, savedReminder.remindAt);
       setReminders(await db.reminders.orderBy("remindAt").toArray());
-      if ("Notification" in window && Notification.permission === "default") {
+      if (!window.desktopBuddy && "Notification" in window && Notification.permission === "default") {
         void Notification.requestPermission().catch(() => undefined);
       }
       setReminderText("");
@@ -319,6 +337,7 @@ export default function App() {
   };
 
   const removeReminder = async (id: number) => {
+    window.desktopBuddy?.cancelReminder(id);
     await db.reminders.delete(id);
     setReminders((current) => current.filter((reminder) => reminder.id !== id));
   };

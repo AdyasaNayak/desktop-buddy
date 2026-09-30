@@ -1,7 +1,8 @@
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { app, BrowserWindow, Notification, ipcMain } = require("electron");
 const path = require("node:path");
 
 let sleepTimer;
+const reminderTimers = new Map();
 
 function createWindow() {
   const window = new BrowserWindow({
@@ -54,6 +55,29 @@ ipcMain.on("sleep-window", (event, duration) => {
 });
 
 ipcMain.on("exit-app", () => app.quit());
+
+ipcMain.on("schedule-reminder", (event, id, text, remindAt) => {
+  if (!Number.isInteger(id) || typeof text !== "string" || !Number.isFinite(remindAt)) return;
+
+  const existing = reminderTimers.get(id);
+  if (existing) clearTimeout(existing);
+
+  const delay = Math.max(0, remindAt - Date.now());
+  const timer = setTimeout(() => {
+    reminderTimers.delete(id);
+    new Notification({ title: "Desktop Buddy reminder", body: text }).show();
+    event.sender.send("reminder-fired", id);
+  }, delay);
+  reminderTimers.set(id, timer);
+});
+
+ipcMain.on("cancel-reminder", (_event, id) => {
+  const timer = reminderTimers.get(id);
+  if (timer) {
+    clearTimeout(timer);
+    reminderTimers.delete(id);
+  }
+});
 
 app.whenReady().then(() => {
   createWindow();
