@@ -301,6 +301,7 @@ export default function App() {
     }
     setReminderError("");
     try {
+      await db.open();
       await db.reminders.add({ text: reminderText.trim(), remindAt, notified: false });
       setReminders(await db.reminders.orderBy("remindAt").toArray());
       if ("Notification" in window && Notification.permission === "default") {
@@ -312,7 +313,8 @@ export default function App() {
       setReminderOpen(false);
     } catch (error) {
       console.error("Could not save reminder", error);
-      setReminderError("Could not save reminder. Please try again.");
+      const message = error instanceof Error ? error.message : String(error);
+      setReminderError(`Could not save reminder: ${message}`);
     }
   };
 
