@@ -45,7 +45,7 @@ export default function App() {
   const [reminderAt, setReminderAt] = useState("");
   const [reminderError, setReminderError] = useState("");
   const [minReminderAt] = useState(() =>
-    new Date(Date.now() + 60000).toISOString().slice(0, 16),
+    toDateTimeLocalValue(new Date(Date.now() + 60000)),
   );
   const [sleepMinutes, setSleepMinutes] = useState("15");
 
@@ -464,3 +464,11 @@ const reminderStyle = {
   gap: 8,
   padding: "3px 0",
 };
+
+function toDateTimeLocalValue(date: Date) {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return [
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
+    `${pad(date.getHours())}:${pad(date.getMinutes())}`,
+  ].join("T");
+}
