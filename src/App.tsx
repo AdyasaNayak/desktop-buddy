@@ -300,15 +300,20 @@ export default function App() {
       return;
     }
     setReminderError("");
-    if ("Notification" in window && Notification.permission === "default") {
-      await Notification.requestPermission();
+    try {
+      await db.reminders.add({ text: reminderText.trim(), remindAt, notified: false });
+      setReminders(await db.reminders.orderBy("remindAt").toArray());
+      if ("Notification" in window && Notification.permission === "default") {
+        void Notification.requestPermission().catch(() => undefined);
+      }
+      setReminderText("");
+      setReminderAt("");
+      setReminderError("");
+      setReminderOpen(false);
+    } catch (error) {
+      console.error("Could not save reminder", error);
+      setReminderError("Could not save reminder. Please try again.");
     }
-    await db.reminders.add({ text: reminderText.trim(), remindAt, notified: false });
-    setReminders(await db.reminders.orderBy("remindAt").toArray());
-    setReminderText("");
-    setReminderAt("");
-    setReminderError("");
-    setReminderOpen(false);
   };
 
   const removeReminder = async (id: number) => {
@@ -365,23 +370,31 @@ export default function App() {
         <div style={dialogStyle}>
           <div style={panelStyle}>
             <strong>New reminder</strong>
-            <input
-              autoFocus
-              placeholder="Reminder text"
-              value={reminderText}
-              onChange={(event) => setReminderText(event.target.value)}
-            />
-            <input
-              type="datetime-local"
-              min={minReminderAt}
-              value={reminderAt}
-              onChange={(event) => setReminderAt(event.target.value)}
-            />
-            {reminderError && <small style={{ color: "#a33" }}>{reminderError}</small>}
-            <div style={buttonRowStyle}>
-              <button onClick={() => void addReminder()}>Add</button>
-              <button onClick={() => setReminderOpen(false)}>Cancel</button>
-            </div>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void addReminder();
+              }}
+              style={{ display: "grid", gap: 8 }}
+            >
+              <input
+                autoFocus
+                placeholder="Reminder text"
+                value={reminderText}
+                onChange={(event) => setReminderText(event.target.value)}
+              />
+              <input
+                type="datetime-local"
+                min={minReminderAt}
+                value={reminderAt}
+                onChange={(event) => setReminderAt(event.target.value)}
+              />
+              {reminderError && <small style={{ color: "#a33" }}>{reminderError}</small>}
+              <div style={buttonRowStyle}>
+                <button type="submit">Add</button>
+                <button type="button" onClick={() => setReminderOpen(false)}>Cancel</button>
+              </div>
+            </form>
             {reminders.length > 0 && (
               <div style={{ maxHeight: 70, overflowY: "auto", fontSize: 12 }}>
                 {reminders.map((reminder) => (
