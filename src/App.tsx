@@ -43,6 +43,10 @@ export default function App() {
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [reminderText, setReminderText] = useState("");
   const [reminderAt, setReminderAt] = useState("");
+  const [reminderError, setReminderError] = useState("");
+  const [minReminderAt] = useState(() =>
+    new Date(Date.now() + 60000).toISOString().slice(0, 16),
+  );
   const [sleepMinutes, setSleepMinutes] = useState("15");
 
   useEffect(() => {
@@ -287,7 +291,15 @@ export default function App() {
 
   const addReminder = async () => {
     const remindAt = new Date(reminderAt).getTime();
-    if (!reminderText.trim() || !Number.isFinite(remindAt) || remindAt <= Date.now()) return;
+    if (!reminderText.trim()) {
+      setReminderError("Enter a reminder message.");
+      return;
+    }
+    if (!Number.isFinite(remindAt) || remindAt <= Date.now()) {
+      setReminderError("Choose a future date and time.");
+      return;
+    }
+    setReminderError("");
     if ("Notification" in window && Notification.permission === "default") {
       await Notification.requestPermission();
     }
@@ -295,6 +307,7 @@ export default function App() {
     setReminders(await db.reminders.orderBy("remindAt").toArray());
     setReminderText("");
     setReminderAt("");
+    setReminderError("");
     setReminderOpen(false);
   };
 
@@ -307,31 +320,43 @@ export default function App() {
     <div style={{ position: "relative", width: "100vw", height: "100vh" }}>
       <canvas ref={canvasRef} style={{ display: "block" }} />
 
-      <div style={{ position: "absolute", top: 12, left: 12, zIndex: 10 }}>
+      <div style={{ position: "absolute", top: 8, right: 8, zIndex: 10 }}>
         {menuOpen && (
           <div
             style={{
               display: "grid",
+              gridTemplateColumns: "1fr 1fr",
               gap: 6,
-              minWidth: 150,
+              minWidth: 230,
               padding: 8,
               borderRadius: 12,
               background: "rgba(255, 248, 231, 0.96)",
               boxShadow: "0 4px 16px rgba(50, 35, 20, 0.2)",
             }}
           >
-            <button onClick={() => (controlRef.current.drinkLeft = 2000)}>💧 Drink water</button>
+            <button onClick={() => {
+              controlRef.current.drinkLeft = 2000;
+              setMenuOpen(false);
+            }}>💧 Drink water</button>
             <button
               onClick={() => {
                 controlRef.current.work = !controlRef.current.work;
                 setWorkOn((prev) => !prev);
+                setMenuOpen(false);
               }}
             >
               {workOn ? "💻 Stop work" : "💻 Work mode"}
             </button>
-            <button onClick={() => setReminderOpen(true)}>🔔 Reminders</button>
-            <button onClick={() => setSleepOpen(true)}>🌙 Sleep</button>
+            <button onClick={() => {
+              setReminderOpen(true);
+              setMenuOpen(false);
+            }}>🔔 Reminders</button>
+            <button onClick={() => {
+              setSleepOpen(true);
+              setMenuOpen(false);
+            }}>🌙 Sleep</button>
             <button onClick={() => window.desktopBuddy?.exitApp()}>✕ Exit</button>
+            <button onClick={() => setMenuOpen(false)}>× Close</button>
           </div>
         )}
       </div>
@@ -348,9 +373,11 @@ export default function App() {
             />
             <input
               type="datetime-local"
+              min={minReminderAt}
               value={reminderAt}
               onChange={(event) => setReminderAt(event.target.value)}
             />
+            {reminderError && <small style={{ color: "#a33" }}>{reminderError}</small>}
             <div style={buttonRowStyle}>
               <button onClick={() => void addReminder()}>Add</button>
               <button onClick={() => setReminderOpen(false)}>Cancel</button>
