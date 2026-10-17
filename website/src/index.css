@@ -1,0 +1,24 @@
+:root {
+  --green-deep: #2d4a1e;
+  --green-mid: #4a7a3a;
+  --green-light: #8fbf77;
+  --canopy-light: #cfe6b8;
+  --sunlight: #f5d76e;
+  --beige: #f0e2c8;
+  --beige-dark: #d9c39c;
+  --ink: #3a2f24;
+  --font-pixel: 'Silkscreen', monospace;
+  --font-body: 'Nunito', sans-serif;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-body);
+  color: var(--ink);
+  background: var(--green-deep);
+}

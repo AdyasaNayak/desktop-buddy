@@ -21,7 +21,7 @@ function createWindow() {
     },
   });
 
-  if (process.argv.includes("--production")) {
+  if (app.isPackaged || process.argv.includes("--production")) {
     window.loadFile(path.join(__dirname, "..", "dist", "index.html"));
   } else {
     window.loadURL("http://localhost:5173");
