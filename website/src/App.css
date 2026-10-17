@@ -1,72 +1,478 @@
-.world {
+/* --- The canopy world ---------------------------------------------- */
+
+.story {
+  position: relative;
   min-height: 100vh;
-  background: linear-gradient(var(--green-mid), var(--green-light));
-  padding: 4rem 1.5rem;
-  text-align: center;
+  overflow: hidden;
+  background: linear-gradient(var(--green-deep), var(--green-mid) 45%, var(--green-light));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 3.5rem 1.5rem 4.5rem;
+  box-sizing: border-box;
 }
 
-.world h1 {
-  font-family: var(--font-pixel);
-  font-size: 1.8rem;
-  color: var(--beige);
-  text-shadow: 2px 2px 0 var(--green-deep);
+.story::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 60% 40% at 70% 8%, var(--sunlight-soft) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 30% at 20% 12%, rgba(245, 215, 110, 0.35) 0%, transparent 65%);
+  pointer-events: none;
 }
 
-.world p {
-  color: var(--canopy-light);
-  max-width: 34rem;
-  margin: 0.75rem auto 2rem;
+.stage {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 46rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
+
+/* --- Drifting leaves ------------------------------------------------ */
+
+.leaf {
+  position: absolute;
+  width: 18px;
+  height: 12px;
+  background: var(--green-mid);
+  border-radius: 60% 40% 60% 40%;
+  opacity: 0.55;
+  pointer-events: none;
+  animation: leaf-drift 14s ease-in-out infinite;
+}
+
+.leaf:nth-child(1) { left: 8%; top: 18%; animation-delay: 0s; }
+.leaf:nth-child(2) { left: 82%; top: 28%; animation-delay: -4s; background: var(--green-light); }
+.leaf:nth-child(3) { left: 15%; top: 55%; animation-delay: -8s; }
+.leaf:nth-child(4) { left: 75%; top: 62%; animation-delay: -11s; background: var(--sunlight-soft); opacity: 0.4; }
+.leaf:nth-child(5) { left: 45%; top: 10%; animation-delay: -6s; background: var(--green-light); }
+
+@keyframes leaf-drift {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  25% { transform: translate(14px, 10px) rotate(18deg); }
+  50% { transform: translate(-8px, 22px) rotate(-14deg); }
+  75% { transform: translate(10px, 8px) rotate(10deg); }
+}
+
+/* --- Treehouse room -------------------------------------------------- */
+
+.treehouse {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 1rem;
+}
+
+.treehouse-roof {
+  width: 300px;
+  height: 46px;
+  margin-bottom: -48px;
+  background: linear-gradient(var(--wood), var(--wood-dark));
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  border-radius: 6px 6px 0 0;
+}
+
+.treehouse-floor {
+  width: 340px;
+  height: 26px;
+  margin-top: -4px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--wood) 0 40px,
+    var(--wood-dark) 40px 44px
+  );
+  border-radius: 8px;
+  box-shadow: 0 10px 0 rgba(45, 74, 30, 0.45);
+}
+
+/* --- Pet sprite ------------------------------------------------------- */
 
 .pet-wrap {
-  display: inline-block;
+  position: relative;
+  z-index: 1;
+  margin-bottom: -10px;
   animation: pet-bob 3s ease-in-out infinite;
 }
 
 .pet {
   width: 192px;
   height: 192px;
-  margin: 0 auto;
   background-repeat: no-repeat;
   background-position: 0 0;
   image-rendering: pixelated;
+  transition: transform 0.6s ease;
 }
 
-.pet--idle {
-  background-size: 576px 192px;
-  animation: pet-idle 0.75s steps(3) infinite;
+@keyframes pet-step-idle {
+  to { background-position: -576px 0; }
 }
 
-.pet--happy {
-  background-size: 384px 192px;
-  animation: pet-happy 0.45s steps(2) infinite;
+@keyframes pet-step-happy {
+  to { background-position: -384px 0; }
 }
 
-@keyframes pet-idle {
-  to {
-    background-position: -576px 0;
-  }
+@keyframes pet-step-drink {
+  to { background-position: -384px 0; }
 }
 
-@keyframes pet-happy {
-  to {
-    background-position: -384px 0;
-  }
+@keyframes pet-step-work {
+  to { background-position: -576px 0; }
 }
 
 @keyframes pet-bob {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-6px);
-  }
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .pet-wrap,
-  .pet {
-    animation: none;
-  }
+/* --- Speech and panels ------------------------------------------------ */
+
+.dialogue {
+  margin: 2.25rem 0 0;
+  max-width: 34rem;
+  background: var(--beige);
+  border: 3px solid var(--wood-dark);
+  border-radius: 14px;
+  padding: 1.1rem 1.5rem;
+  box-shadow: 4px 4px 0 rgba(45, 74, 30, 0.4);
+  position: relative;
+  text-align: center;
+}
+
+.dialogue::before {
+  content: "";
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  margin-left: -10px;
+  border: 10px solid transparent;
+  border-bottom-color: var(--wood-dark);
+}
+
+.dialogue p {
+  margin: 0;
+  font-size: 1.05rem;
+  line-height: 1.55;
+}
+
+.dialogue .pet-name {
+  font-family: var(--font-pixel);
+  color: var(--green-deep);
+}
+
+.panel {
+  margin-top: 1.5rem;
+  width: 100%;
+  max-width: 34rem;
+  background: var(--beige);
+  border: 3px solid var(--wood-dark);
+  border-radius: 14px;
+  padding: 1.5rem 1.75rem;
+  box-sizing: border-box;
+  box-shadow: 4px 4px 0 rgba(45, 74, 30, 0.4);
+}
+
+.panel h2 {
+  margin: 0 0 0.75rem;
+  font-family: var(--font-pixel);
+  font-size: 1.15rem;
+  color: var(--green-deep);
+}
+
+.panel p {
+  margin: 0.4rem 0;
+  line-height: 1.55;
+}
+
+/* --- Buttons ----------------------------------------------------------- */
+
+.story-btn {
+  margin-top: 1.5rem;
+  font-family: var(--font-pixel);
+  font-size: 0.95rem;
+  color: var(--beige);
+  background: var(--green-mid);
+  border: 3px solid var(--green-deep);
+  border-radius: 10px;
+  padding: 0.75rem 1.6rem;
+  cursor: pointer;
+  box-shadow: 0 4px 0 var(--green-deep);
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+.story-btn:hover {
+  background: var(--green-light);
+  color: var(--green-deep);
+}
+
+.story-btn:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--green-deep);
+}
+
+.story-btn--primary {
+  background: var(--sunlight);
+  color: var(--ink);
+  border-color: var(--wood-dark);
+  box-shadow: 0 4px 0 var(--wood-dark);
+  text-decoration: none;
+  display: inline-block;
+}
+
+.story-btn--primary:hover {
+  background: var(--sunlight-soft);
+  color: var(--ink);
+}
+
+.story-btn--primary:active {
+  box-shadow: 0 1px 0 var(--wood-dark);
+}
+
+.story-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* --- Naming form (scene 2) --------------------------------------------- */
+
+.name-form {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.name-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-family: var(--font-pixel);
+  font-size: 0.8rem;
+  color: var(--green-deep);
+  text-align: left;
+}
+
+.name-form input {
+  font-family: var(--font-body);
+  font-size: 1rem;
+  color: var(--ink);
+  background: #fffdf6;
+  border: 2px solid var(--beige-dark);
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+}
+
+.name-form input:focus {
+  outline: 2px solid var(--green-mid);
+}
+
+.name-form .name-error {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: #a04b2e;
+}
+
+/* --- Feature cards (scene 3) -------------------------------------------- */
+
+.features {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.9rem;
+  margin-top: 1rem;
+}
+
+.feature-card {
+  background: #fffdf6;
+  border: 2px solid var(--beige-dark);
+  border-radius: 10px;
+  padding: 0.8rem 1rem;
+  text-align: left;
+}
+
+.feature-card h3 {
+  margin: 0;
+  font-family: var(--font-pixel);
+  font-size: 0.85rem;
+  color: var(--green-deep);
+}
+
+.feature-card p {
+  margin: 0.35rem 0 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+/* --- Download chest (scene 4) -------------------------------------------- */
+
+.chest {
+  position: relative;
+  /* Leave room for the opened lid, which sweeps up beside the title. */
+  margin-top: 9rem;
+  width: 220px;
+  height: 130px;
+}
+
+.chest-lid {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 220px;
+  height: 44px;
+  background: linear-gradient(var(--wood), var(--wood-dark));
+  border-radius: 12px 12px 0 0;
+  border: 3px solid var(--wood-dark);
+  box-sizing: border-box;
+  transform-origin: left bottom;
+  transition: transform 0.6s ease;
+}
+
+.chest.is-open .chest-lid {
+  transform: rotate(-38deg);
+}
+
+.chest-body {
+  position: absolute;
+  top: 44px;
+  left: 0;
+  width: 220px;
+  height: 86px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--wood) 0 36px,
+    var(--wood-dark) 36px 40px
+  );
+  border: 3px solid var(--wood-dark);
+  border-radius: 0 0 12px 12px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chest-glow {
+  width: 120px;
+  height: 40px;
+  border-radius: 50%;
+  background: radial-gradient(var(--sunlight), transparent 70%);
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+
+.chest.is-open .chest-glow {
+  opacity: 1;
+}
+
+.os-options {
+  display: flex;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+.os-option {
+  background: #fffdf6;
+  border: 2px solid var(--beige-dark);
+  border-radius: 10px;
+  padding: 0.7rem 1rem;
+  font-family: var(--font-pixel);
+  font-size: 0.8rem;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.os-option.is-active {
+  border-color: var(--green-mid);
+  background: var(--canopy-light);
+}
+
+.os-option:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.os-note {
+  margin-top: 0.75rem;
+  font-size: 0.88rem;
+  color: #6b5a44;
+}
+
+/* --- Steps list (scene 5) -------------------------------------------------- */
+
+.steps-list {
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+  text-align: left;
+}
+
+.steps-list li {
+  counter-increment: step;
+  position: relative;
+  padding: 0.55rem 0 0.55rem 2.6rem;
+  line-height: 1.5;
+}
+
+.steps-list li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 0.55rem;
+  width: 1.8rem;
+  height: 1.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-pixel);
+  font-size: 0.8rem;
+  color: var(--beige);
+  background: var(--green-mid);
+  border-radius: 6px;
+}
+
+/* --- Scene title ------------------------------------------------------------ */
+
+.scene-title {
+  font-family: var(--font-pixel);
+  font-size: 1.6rem;
+  color: var(--beige);
+  text-shadow: 2px 2px 0 var(--green-deep);
+  margin: 0;
+  text-align: center;
+}
+
+.story-actions {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* --- Story progress dots ------------------------------------------------ */
+
+.story-dots {
+  position: absolute;
+  bottom: 1.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 0.55rem;
+  z-index: 1;
+}
+
+.story-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(240, 226, 200, 0.35);
+  border: 1px solid rgba(45, 74, 30, 0.5);
+}
+
+.story-dot.is-active {
+  background: var(--sunlight);
 }

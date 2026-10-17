@@ -4,6 +4,9 @@
   --green-light: #8fbf77;
   --canopy-light: #cfe6b8;
   --sunlight: #f5d76e;
+  --sunlight-soft: #fbe9a6;
+  --wood: #a97c50;
+  --wood-dark: #7c5836;
   --beige: #f0e2c8;
   --beige-dark: #d9c39c;
   --ink: #3a2f24;
@@ -21,4 +24,14 @@ body {
   font-family: var(--font-body);
   color: var(--ink);
   background: var(--green-deep);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
