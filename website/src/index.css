@@ -1,21 +1,15 @@
 :root {
-  /* sunlit canopy palette */
-  --sky: #f7ecc0;
-  --sky-warm: #f9dd8e;
-  --leaf-deep: #274b2c;
-  --leaf: #4a7c3f;
-  --leaf-light: #8fbf6a;
-  --canopy-light: #cfe6b8;
-  --sun: #f5c453;
-  --sun-soft: #ffe9a8;
-  --paper: #f6ead0;
-  --paper-dark: #e8d7b2;
-  --beige-dark: #b9a67e;
-  --wood: #9c6b3f;
-  --wood-dark: #6e4a2a;
-  --ink: #3c3220;
-  --ink-soft: #6d5f45;
-  --cream: #fdf6e0;
+  /* pastel sticker-book palette */
+  --ink: #4a3a55;
+  --ink-soft: #75627f;
+  --pink: #f78fb8;
+  --pink-deep: #b23a72;
+  --pink-soft: #ffd9e8;
+  --lavender: #b79bef;
+  --lavender-soft: #eae1ff;
+  --sun: #ffd166;
+  --sun-soft: #ffedb8;
+  --paper: #fffdf8;
 
   --font-pixel: "Silkscreen", monospace;
   --font-body: "Nunito", sans-serif;
@@ -36,16 +30,16 @@ body {
   font-size: 1rem;
   line-height: 1.6;
   color: var(--ink);
-  background: var(--sky);
+  background: #fff7fb;
 }
 
 ::selection {
-  background: var(--sun-soft);
-  color: var(--leaf-deep);
+  background: var(--pink-soft);
+  color: var(--ink);
 }
 
 :focus-visible {
-  outline: 3px solid var(--sun);
+  outline: 3px solid var(--pink-deep);
   outline-offset: 2px;
 }
 
