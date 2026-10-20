@@ -5,4 +5,12 @@ import { defineConfig } from "vite";
 export default defineConfig({
   base: "./",
   plugins: [react()],
+  // Allow accessing the dev/preview server through forwarded sandbox hosts
+  // (e.g. *.vercel.run preview URLs) instead of only localhost.
+  server: {
+    allowedHosts: [".vercel.run"],
+  },
+  preview: {
+    allowedHosts: [".vercel.run"],
+  },
 });

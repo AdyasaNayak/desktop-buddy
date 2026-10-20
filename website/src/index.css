@@ -1,15 +1,15 @@
 :root {
-  /* pastel sticker-book palette */
-  --ink: #4a3a55;
-  --ink-soft: #75627f;
-  --pink: #f78fb8;
-  --pink-deep: #b23a72;
-  --pink-soft: #ffd9e8;
-  --lavender: #b79bef;
-  --lavender-soft: #eae1ff;
+  /* bright pastel sticker-book palette — iridescent blue */
+  --ink: #2c3e66;
+  --ink-soft: #4f639a;
+  --sky: #8fd9ff;
+  --sky-deep: #1667ad;
+  --sky-soft: #d9f2ff;
+  --lilac: #c9b6ff;
+  --lilac-soft: #ece6ff;
   --sun: #ffd166;
-  --sun-soft: #ffedb8;
-  --paper: #fffdf8;
+  --sun-soft: #fff3c4;
+  --paper: #fdfeff;
 
   --font-pixel: "Silkscreen", monospace;
   --font-body: "Nunito", sans-serif;
@@ -30,16 +30,16 @@ body {
   font-size: 1rem;
   line-height: 1.6;
   color: var(--ink);
-  background: #fff7fb;
+  background: #eefaff;
 }
 
 ::selection {
-  background: var(--pink-soft);
+  background: var(--sky-soft);
   color: var(--ink);
 }
 
 :focus-visible {
-  outline: 3px solid var(--pink-deep);
+  outline: 3px solid var(--sky-deep);
   outline-offset: 2px;
 }
 

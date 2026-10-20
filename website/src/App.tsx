@@ -3,8 +3,26 @@ import { Pet } from "./Pet";
 import "./App.css";
 
 const DOWNLOAD_URL = "https://github.com/AdyasaNayak/desktop-buddy/releases";
+const RELEASES_API =
+  "https://api.github.com/repos/AdyasaNayak/desktop-buddy/releases?per_page=10";
 const ISSUES_URL = "https://github.com/AdyasaNayak/desktop-buddy/issues";
 const REPO_URL = "https://github.com/AdyasaNayak/desktop-buddy";
+const CLONE_CMD =
+  "git clone https://github.com/AdyasaNayak/desktop-buddy && cd desktop-buddy && npm install && npm run desktop";
+
+type ReleaseAsset = { name: string; browser_download_url: string };
+type GithubRelease = { tag_name?: string; assets?: ReleaseAsset[] };
+
+/** The newest release's Windows installer, if one has been published. */
+function findInstaller(releases: GithubRelease[]) {
+  for (const release of releases) {
+    const installer = (release.assets ?? []).find(
+      (asset) => /\.exe$/i.test(asset.name) && !/\.blockmap$/i.test(asset.name),
+    );
+    if (installer) return { url: installer.browser_download_url, tag: release.tag_name };
+  }
+  return null;
+}
 
 const BUBBLES = [
   "psst… i heard your desktop is very cozy.",
@@ -50,14 +68,14 @@ const FLOATIES: {
   delay: string;
   dur: string;
 }[] = [
-  { icon: "heart", left: "6%", top: "18%", size: "1.2rem", color: "var(--pink)", delay: "0s", dur: "7s" },
-  { icon: "sparkle", left: "15%", top: "56%", size: "0.9rem", color: "var(--lavender)", delay: "1.2s", dur: "8s" },
-  { icon: "flower", left: "25%", top: "28%", size: "1.1rem", color: "var(--pink)", delay: "2.1s", dur: "6.5s" },
-  { icon: "moon", left: "82%", top: "20%", size: "1.1rem", color: "var(--lavender)", delay: "0.6s", dur: "7.5s" },
+  { icon: "heart", left: "6%", top: "18%", size: "1.2rem", color: "var(--sky)", delay: "0s", dur: "7s" },
+  { icon: "sparkle", left: "15%", top: "56%", size: "0.9rem", color: "var(--lilac)", delay: "1.2s", dur: "8s" },
+  { icon: "flower", left: "25%", top: "28%", size: "1.1rem", color: "var(--sky)", delay: "2.1s", dur: "6.5s" },
+  { icon: "moon", left: "82%", top: "20%", size: "1.1rem", color: "var(--lilac)", delay: "0.6s", dur: "7.5s" },
   { icon: "sparkle", left: "90%", top: "50%", size: "1rem", color: "var(--sun)", delay: "1.8s", dur: "6s" },
-  { icon: "heart", left: "73%", top: "64%", size: "1rem", color: "var(--pink)", delay: "2.8s", dur: "8.5s" },
-  { icon: "flower", left: "45%", top: "10%", size: "1.2rem", color: "var(--pink)", delay: "3.2s", dur: "7s" },
-  { icon: "sparkle", left: "58%", top: "72%", size: "0.9rem", color: "var(--lavender)", delay: "0.9s", dur: "9s" },
+  { icon: "heart", left: "73%", top: "64%", size: "1rem", color: "var(--sky)", delay: "2.8s", dur: "8.5s" },
+  { icon: "flower", left: "45%", top: "10%", size: "1.2rem", color: "var(--sky)", delay: "3.2s", dur: "7s" },
+  { icon: "sparkle", left: "58%", top: "72%", size: "0.9rem", color: "var(--lilac)", delay: "0.9s", dur: "9s" },
 ];
 
 function PawIcon() {
@@ -91,7 +109,7 @@ function SparkleIcon() {
 function FlowerIcon() {
   return (
     <svg viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true" focusable="false">
-      <g fill="var(--pink)">
+      <g fill="var(--sky)">
         <circle cx="12" cy="5.5" r="4" />
         <circle cx="5.5" cy="10.2" r="4" />
         <circle cx="18.5" cy="10.2" r="4" />
@@ -181,8 +199,24 @@ export default function App() {
   const [bubble, setBubble] = useState(0);
   const [sender, setSender] = useState("");
   const [message, setMessage] = useState("");
+  const [installer, setInstaller] = useState<{ url: string; tag?: string } | null>(null);
 
   useReveal();
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(RELEASES_API)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((releases: GithubRelease[] | null) => {
+        if (!cancelled && Array.isArray(releases)) setInstaller(findInstaller(releases));
+      })
+      .catch(() => {
+        // offline or rate-limited — keep pointing at the releases page
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -234,16 +268,28 @@ export default function App() {
             loves you forever. No account. No cloud. Just a cat.
           </p>
           <div className="hero-cta">
-            <a className="btn btn--big" href={DOWNLOAD_URL}>
+            <a className="btn btn--big" href={installer?.url ?? DOWNLOAD_URL}>
               <svg className="btn-arrow" viewBox="0 0 16 16" width="0.85em" height="0.85em" aria-hidden="true" focusable="false">
                 <path d="M8 2v9" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
                 <path d="M3.8 7.6 8 11.8l4.2-4.2" stroke="currentColor" strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               download for windows
             </a>
-            <p className="cta-note">
-              free and open source, and small enough to fit in a pocket
-            </p>
+            {installer ? (
+              <p className="cta-note">
+                desktop buddy {installer.tag ?? ""} · windows installer · free and open source
+              </p>
+            ) : (
+              <p className="cta-note">
+                the first installer is still baking — it will land right on this button the
+                moment a release ships
+              </p>
+            )}
+            {!installer && (
+              <p className="cta-note">
+                can&rsquo;t wait? run me from source: <code>{CLONE_CMD}</code>
+              </p>
+            )}
             <p className="cta-note cta-note--soon">
               mac and linux are still learning to walk — coming soon!
             </p>
