@@ -1,14 +1,24 @@
 :root {
-  --green-deep: #2d4a1e;
-  --green-mid: #4a7a3a;
-  --green-light: #8fbf77;
+  /* sunlit canopy palette */
+  --sky: #f7ecc0;
+  --sky-warm: #f9dd8e;
+  --leaf-deep: #274b2c;
+  --leaf: #4a7c3f;
+  --leaf-light: #8fbf6a;
   --canopy-light: #cfe6b8;
-  --sunlight: #f5d76e;
-  --beige: #f0e2c8;
-  --beige-dark: #d9c39c;
-  --ink: #3a2f24;
-  --font-pixel: 'Silkscreen', monospace;
-  --font-body: 'Nunito', sans-serif;
+  --sun: #f5c453;
+  --sun-soft: #ffe9a8;
+  --paper: #f6ead0;
+  --paper-dark: #e8d7b2;
+  --beige-dark: #b9a67e;
+  --wood: #9c6b3f;
+  --wood-dark: #6e4a2a;
+  --ink: #3c3220;
+  --ink-soft: #6d5f45;
+  --cream: #fdf6e0;
+
+  --font-pixel: "Silkscreen", monospace;
+  --font-body: "Nunito", sans-serif;
 }
 
 html,
@@ -17,8 +27,30 @@ body {
   padding: 0;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: 1.6;
   color: var(--ink);
-  background: var(--green-deep);
+  background: var(--sky);
+}
+
+::selection {
+  background: var(--sun-soft);
+  color: var(--leaf-deep);
+}
+
+:focus-visible {
+  outline: 3px solid var(--sun);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
 }
