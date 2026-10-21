@@ -1,4 +1,5 @@
 :root {
+<<<<<<< HEAD
   /* sunlit canopy palette */
   --sky: #f7ecc0;
   --sky-warm: #f9dd8e;
@@ -16,6 +17,19 @@
   --ink: #3c3220;
   --ink-soft: #6d5f45;
   --cream: #fdf6e0;
+=======
+  /* bright pastel sticker-book palette — iridescent blue */
+  --ink: #2c3e66;
+  --ink-soft: #4f639a;
+  --sky: #8fd9ff;
+  --sky-deep: #1667ad;
+  --sky-soft: #d9f2ff;
+  --lilac: #c9b6ff;
+  --lilac-soft: #ece6ff;
+  --sun: #ffd166;
+  --sun-soft: #fff3c4;
+  --paper: #fdfeff;
+>>>>>>> origin/buildful/in-the-website-folder-can-you-create-my--838000
 
   --font-pixel: "Silkscreen", monospace;
   --font-body: "Nunito", sans-serif;
@@ -36,6 +50,7 @@ body {
   font-size: 1rem;
   line-height: 1.6;
   color: var(--ink);
+<<<<<<< HEAD
   background: var(--sky);
 }
 
@@ -46,6 +61,18 @@ body {
 
 :focus-visible {
   outline: 3px solid var(--sun);
+=======
+  background: #eefaff;
+}
+
+::selection {
+  background: var(--sky-soft);
+  color: var(--ink);
+}
+
+:focus-visible {
+  outline: 3px solid var(--sky-deep);
+>>>>>>> origin/buildful/in-the-website-folder-can-you-create-my--838000
   outline-offset: 2px;
 }
 
