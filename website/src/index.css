@@ -1,23 +1,4 @@
 :root {
-<<<<<<< HEAD
-  /* sunlit canopy palette */
-  --sky: #f7ecc0;
-  --sky-warm: #f9dd8e;
-  --leaf-deep: #274b2c;
-  --leaf: #4a7c3f;
-  --leaf-light: #8fbf6a;
-  --canopy-light: #cfe6b8;
-  --sun: #f5c453;
-  --sun-soft: #ffe9a8;
-  --paper: #f6ead0;
-  --paper-dark: #e8d7b2;
-  --beige-dark: #b9a67e;
-  --wood: #9c6b3f;
-  --wood-dark: #6e4a2a;
-  --ink: #3c3220;
-  --ink-soft: #6d5f45;
-  --cream: #fdf6e0;
-=======
   /* bright pastel sticker-book palette — iridescent blue */
   --ink: #2c3e66;
   --ink-soft: #4f639a;
@@ -29,7 +10,6 @@
   --sun: #ffd166;
   --sun-soft: #fff3c4;
   --paper: #fdfeff;
->>>>>>> origin/buildful/in-the-website-folder-can-you-create-my--838000
 
   --font-pixel: "Silkscreen", monospace;
   --font-body: "Nunito", sans-serif;
@@ -50,18 +30,6 @@ body {
   font-size: 1rem;
   line-height: 1.6;
   color: var(--ink);
-<<<<<<< HEAD
-  background: var(--sky);
-}
-
-::selection {
-  background: var(--sun-soft);
-  color: var(--leaf-deep);
-}
-
-:focus-visible {
-  outline: 3px solid var(--sun);
-=======
   background: #eefaff;
 }
 
@@ -72,7 +40,6 @@ body {
 
 :focus-visible {
   outline: 3px solid var(--sky-deep);
->>>>>>> origin/buildful/in-the-website-folder-can-you-create-my--838000
   outline-offset: 2px;
 }
 
