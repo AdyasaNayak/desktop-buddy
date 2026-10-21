@@ -51,6 +51,7 @@
       "signAndEditExecutable": false
     },
     "nsis": {
+      "warningsAsErrors": false,
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
