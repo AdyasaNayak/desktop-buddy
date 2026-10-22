@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { db, type Reminder } from "./db";
+import { db, type Profile, type Reminder } from "./db";
 import idleSheet from "./assets/cat.png";
 import heartSheet from "./assets/catheart.png";
 import drinkSheet from "./assets/catdrink.png";
@@ -15,6 +15,8 @@ declare global {
       scheduleReminder: (id: number, text: string, remindAt: number) => void;
       cancelReminder: (id: number) => void;
       onReminder: (callback: (id: number) => void) => () => void;
+      setLoginItem: (openAtLogin: boolean) => boolean;
+      isPackaged: boolean;
     };
   }
 }
@@ -51,6 +53,33 @@ export default function App() {
     toDateTimeLocalValue(new Date(Date.now() + 60000)),
   );
   const [sleepMinutes, setSleepMinutes] = useState("15");
+  // undefined = still loading, null = first run (show setup)
+  const [profile, setProfile] = useState<Profile | null | undefined>(undefined);
+  const [petName, setPetName] = useState("");
+  const [yourName, setYourName] = useState("");
+  const [startWithWindows, setStartWithWindows] = useState(true);
+  const [renaming, setRenaming] = useState(false);
+  const [welcome, setWelcome] = useState<string | null>(null);
+  const showSetup = profile === null;
+  // true once a profile exists (or is created), no form is shown, and the pet view can mount
+  const petReady = profile !== undefined && !showSetup && !renaming;
+
+  useEffect(() => {
+    let active = true;
+    const loadProfile = async () => {
+      try {
+        await db.open();
+        const saved = await db.profiles.get("me");
+        if (active) setProfile(saved ?? null);
+      } catch {
+        if (active) setProfile(null);
+      }
+    };
+    void loadProfile();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -97,7 +126,10 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const canvas = canvasRef.current!;
+    // the canvas only exists once a profile is loaded/created
+    if (!petReady) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
     const ctx = canvas.getContext("2d")!;
 
     const images: Record<PetState, HTMLImageElement> = {
@@ -110,6 +142,16 @@ export default function App() {
     images.heart.src = heartSheet;
     images.drink.src = drinkSheet;
     images.work.src = workSheet;
+    // a sheet finishing after an earlier empty paint must invalidate the cache
+    images.heart.onload = () => {
+      lastPaintKey = "";
+    };
+    images.drink.onload = () => {
+      lastPaintKey = "";
+    };
+    images.work.onload = () => {
+      lastPaintKey = "";
+    };
 
     let groundY = window.innerHeight - SIZE - 10;
     let x = window.innerWidth / 2 - SIZE / 2;
@@ -129,6 +171,7 @@ export default function App() {
     let raf = 0;
     let isHovering = false;
     let lastState: PetState = "idle";
+    let lastPaintKey = "";
     let petTimeout: ReturnType<typeof setTimeout> | undefined;
     let disposed = false;
 
@@ -137,6 +180,7 @@ export default function App() {
       canvas.height = window.innerHeight;
       groundY = canvas.height - SIZE - 10;
       y = Math.min(y, groundY);
+      lastPaintKey = ""; // resizing clears the canvas, force a repaint
     };
     resize();
     window.addEventListener("resize", resize);
@@ -279,9 +323,16 @@ export default function App() {
       // safety clamp: never let cat go below screen
       y = Math.max(0, Math.min(y, groundY));
 
+      // repaint only when pixels can actually change - constant repainting
+      // of a transparent window keeps the compositor busy and feels laggy
+      const paintKey = `${state}:${frame}:${Math.round(x)}:${Math.round(y)}`;
+      if (paintKey === lastPaintKey) return;
+      lastPaintKey = paintKey;
+
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       const img = images[state];
       if (img.complete) {
+        ctx.imageSmoothingEnabled = false;
         ctx.drawImage(img, frame * 64, 0, 64, 64, x, y, SIZE, SIZE);
       }
     };
@@ -303,7 +354,8 @@ export default function App() {
       if (petTimeout) clearTimeout(petTimeout);
       cancelAnimationFrame(raf);
     };
-  }, []);
+    // re-run when the pet view mounts (profile load / first-run setup handoff)
+  }, [petReady]);
 
   const addReminder = async () => {
     const remindAt = new Date(reminderAt).getTime();
@@ -342,9 +394,90 @@ export default function App() {
     setReminders((current) => current.filter((reminder) => reminder.id !== id));
   };
 
+  const finishSetup = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const saved: Profile = {
+      id: "me",
+      petName: petName.trim() || "Mochi",
+      yourName: yourName.trim(),
+      petType: "cat",
+    };
+    try {
+      await db.profiles.put(saved);
+    } catch (error) {
+      console.error("Could not save profile", error);
+    }
+    // login-item registration is a first-run choice only; renaming never
+    // silently re-applies (or ignores) the startup checkbox
+    if (!renaming && window.desktopBuddy?.isPackaged && startWithWindows) {
+      window.desktopBuddy.setLoginItem(true);
+    }
+    setProfile(saved);
+    setRenaming(false);
+    setWelcome(
+      saved.yourName
+        ? `meow! i'm ${saved.petName}. hi, ${saved.yourName}!`
+        : `meow! i'm ${saved.petName}. i live here now.`,
+    );
+    window.setTimeout(() => setWelcome(null), 6000);
+  };
+
+  if (profile === undefined) return null;
+
+  if (profile === null || renaming) {
+    return (
+      <div style={{ width: "100vw", height: "100vh", display: "grid", placeItems: "center" }}>
+        <form style={onboardingStyle} onSubmit={(event) => void finishSetup(event)}>
+          <strong>{renaming ? "✏️ let's tweak my name" : "🐾 hi! i'm your new buddy"}</strong>
+          <label>
+            name me
+            <input
+              autoFocus
+              placeholder="e.g. Mochi"
+              maxLength={20}
+              value={petName}
+              onChange={(event) => setPetName(event.target.value)}
+            />
+          </label>
+          <label>
+            and what should i call you?
+            <input
+              placeholder="your name (optional)"
+              maxLength={20}
+              value={yourName}
+              onChange={(event) => setYourName(event.target.value)}
+            />
+          </label>
+          {window.desktopBuddy?.isPackaged && !renaming && (
+            <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12 }}>
+              <input
+                type="checkbox"
+                checked={startWithWindows}
+                onChange={(event) => setStartWithWindows(event.target.checked)}
+              />
+              start me when my computer turns on
+            </label>
+          )}
+          <button type="submit">{renaming ? "save ✨" : "let's go ✨"}</button>
+          {renaming && (
+            <button type="button" onClick={() => setRenaming(false)}>
+              cancel
+            </button>
+          )}
+        </form>
+      </div>
+    );
+  }
+
   return (
     <div style={{ position: "relative", width: "100vw", height: "100vh" }}>
       <canvas ref={canvasRef} style={{ display: "block" }} />
+
+      {welcome && (
+        <div style={{ position: "absolute", top: 8, left: 8, maxWidth: 250 }}>
+          <div style={welcomeStyle}>{welcome}</div>
+        </div>
+      )}
 
       <div style={{ position: "absolute", top: 8, right: 8, zIndex: 10 }}>
         {menuOpen && (
@@ -381,6 +514,12 @@ export default function App() {
               setSleepOpen(true);
               setMenuOpen(false);
             }}>🌙 Sleep</button>
+            <button onClick={() => {
+              setPetName(profile.petName);
+              setYourName(profile.yourName);
+              setRenaming(true);
+              setMenuOpen(false);
+            }}>✏️ Rename</button>
             <button onClick={() => window.desktopBuddy?.exitApp()}>✕ Exit</button>
             <button onClick={() => setMenuOpen(false)}>× Close</button>
           </div>
@@ -459,6 +598,23 @@ export default function App() {
   );
 }
 
+const onboardingStyle = {
+  display: "grid",
+  gap: 8,
+  width: 280,
+  padding: 16,
+  borderRadius: 14,
+  background: "rgba(255, 248, 231, 0.98)",
+  boxShadow: "0 5px 20px rgba(50, 35, 20, 0.24)",
+  fontSize: 13,
+};
+const welcomeStyle = {
+  padding: "8px 12px",
+  borderRadius: 12,
+  background: "rgba(255, 248, 231, 0.96)",
+  boxShadow: "0 4px 16px rgba(50, 35, 20, 0.2)",
+  fontSize: 12,
+};
 const dialogStyle = {
   position: "absolute" as const,
   inset: 0,

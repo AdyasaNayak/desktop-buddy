@@ -172,6 +172,63 @@
   word-break: break-all;
 }
 
+/* ---------- post-download setup guide ---------- */
+
+.download-guide {
+  max-width: 34rem;
+  padding: 1.1rem 1.4rem 1.2rem;
+  background: var(--paper);
+  border: 3px solid var(--ink);
+  border-radius: 16px;
+  box-shadow: 4px 4px 0 rgba(44, 62, 102, 0.22);
+  transform: rotate(-0.6deg);
+  text-align: left;
+  animation: guide-pop 0.4s ease both;
+}
+
+@keyframes guide-pop {
+  from {
+    opacity: 0;
+    transform: translateY(8px) rotate(-0.6deg) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(-0.6deg);
+  }
+}
+
+.download-guide__title {
+  margin: 0 0 0.6rem;
+  font-family: var(--font-pixel);
+  font-size: 0.72rem;
+  color: var(--sky-deep);
+}
+
+.download-guide ol {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 0.55rem;
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.download-guide kbd {
+  font-family: monospace;
+  font-size: 0.78rem;
+  background: var(--sky-soft);
+  border: 2px solid var(--ink);
+  border-bottom-width: 3px;
+  border-radius: 5px;
+  padding: 0 0.3rem;
+}
+
+.download-guide em {
+  font-style: normal;
+  font-weight: 800;
+  color: var(--sky-deep);
+}
+
 /* ---------- speech bubbles ---------- */
 
 .speech {
@@ -575,6 +632,7 @@
   .btn-arrow,
   .speech,
   .pet,
+  .download-guide,
   [data-reveal] {
     animation: none !important;
     transition: none !important;

@@ -56,6 +56,20 @@ ipcMain.on("sleep-window", (event, duration) => {
 
 ipcMain.on("exit-app", () => app.quit());
 
+ipcMain.on("is-packaged", (event) => {
+  event.returnValue = app.isPackaged;
+});
+
+ipcMain.on("set-login-item", (event, openAtLogin) => {
+  // login items only make sense for the installed app, not the dev runner
+  if (!app.isPackaged) {
+    event.returnValue = false;
+    return;
+  }
+  app.setLoginItemSettings({ openAtLogin: openAtLogin === true });
+  event.returnValue = app.getLoginItemSettings().openAtLogin === (openAtLogin === true);
+});
+
 ipcMain.on("schedule-reminder", (event, id, text, remindAt) => {
   if (!Number.isInteger(id) || typeof text !== "string" || !Number.isFinite(remindAt)) return;
 

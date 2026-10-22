@@ -39,7 +39,7 @@ const FAQS: { q: string; a: string }[] = [
   },
   {
     q: "Which platforms does it run on?",
-    a: "Windows right now. macOS and Linux versions are on the way - the cat is still learning to walk on other roofs.",
+    a: "Windows right now. macOS and Linux versions are on the way — the cat is still learning to walk on other roofs.",
   },
   {
     q: "Will it slow my computer down?",
@@ -51,7 +51,7 @@ const FAQS: { q: string; a: string }[] = [
   },
   {
     q: "Can I give the cat a name?",
-    a: "Of course. Once it moves in, you can name it - and name yourself too. Cats forget nothing, except maybe Tuesdays.",
+    a: "Of course. Once it moves in, you can name it — and name yourself too. Cats forget nothing, except maybe Tuesdays.",
   },
   {
     q: "How do I report a bug or ask something?",
@@ -200,6 +200,7 @@ export default function App() {
   const [sender, setSender] = useState("");
   const [message, setMessage] = useState("");
   const [installer, setInstaller] = useState<{ url: string; tag?: string } | null>(null);
+  const [showGuide, setShowGuide] = useState(false);
 
   useReveal();
 
@@ -268,7 +269,16 @@ export default function App() {
             loves you forever. No account. No cloud. Just a cat.
           </p>
           <div className="hero-cta">
-            <a className="btn btn--big" href={installer?.url ?? DOWNLOAD_URL}>
+            <a
+              className="btn btn--big"
+              href={installer?.url ?? DOWNLOAD_URL}
+              target="_blank"
+              rel="noreferrer"
+              onClick={() => {
+                // only a real installer download gets the setup guide
+                if (installer) setShowGuide(true);
+              }}
+            >
               <svg className="btn-arrow" viewBox="0 0 16 16" width="0.85em" height="0.85em" aria-hidden="true" focusable="false">
                 <path d="M8 2v9" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
                 <path d="M3.8 7.6 8 11.8l4.2-4.2" stroke="currentColor" strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
@@ -293,6 +303,31 @@ export default function App() {
             <p className="cta-note cta-note--soon">
               mac and linux are still learning to walk — coming soon!
             </p>
+            {showGuide && installer && (
+              <div className="download-guide" role="note">
+                <p className="download-guide__title">
+                  <SparkleIcon /> the installer is on its way!
+                </p>
+                <ol>
+                  <li>
+                    <strong>find it in your downloads.</strong> every browser keeps it in one
+                    place — the downloads bubble next to the address bar, the downloads bar at
+                    the bottom, or <kbd>ctrl</kbd>+<kbd>j</kbd>.
+                  </li>
+                  <li>
+                    <strong>click it to start setup.</strong> browsers never run downloads by
+                    themselves (that keeps you safe) — one click from you does it. if windows
+                    shows a “unknown publisher” warning, choose <em>more info → run anyway</em>
+                    — the app is new, not scary.
+                  </li>
+                  <li>
+                    <strong>say hi to your cat.</strong> the setup wizard walks you through
+                    everything, and with “run desktop buddy” left checked on the last step, the
+                    cat pops onto your screen the moment it finishes installing.
+                  </li>
+                </ol>
+              </div>
+            )}
           </div>
         </div>
       </header>
