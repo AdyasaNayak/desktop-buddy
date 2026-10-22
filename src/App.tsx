@@ -58,10 +58,11 @@ export default function App() {
   const [petName, setPetName] = useState("");
   const [yourName, setYourName] = useState("");
   const [startWithWindows, setStartWithWindows] = useState(true);
+  const [renaming, setRenaming] = useState(false);
   const [welcome, setWelcome] = useState<string | null>(null);
   const showSetup = profile === null;
-  // true once a profile exists (or is created) and the pet view can mount
-  const petReady = profile !== undefined && !showSetup;
+  // true once a profile exists (or is created), no form is shown, and the pet view can mount
+  const petReady = profile !== undefined && !showSetup && !renaming;
 
   useEffect(() => {
     let active = true;
@@ -141,6 +142,16 @@ export default function App() {
     images.heart.src = heartSheet;
     images.drink.src = drinkSheet;
     images.work.src = workSheet;
+    // a sheet finishing after an earlier empty paint must invalidate the cache
+    images.heart.onload = () => {
+      lastPaintKey = "";
+    };
+    images.drink.onload = () => {
+      lastPaintKey = "";
+    };
+    images.work.onload = () => {
+      lastPaintKey = "";
+    };
 
     let groundY = window.innerHeight - SIZE - 10;
     let x = window.innerWidth / 2 - SIZE / 2;
@@ -160,6 +171,7 @@ export default function App() {
     let raf = 0;
     let isHovering = false;
     let lastState: PetState = "idle";
+    let lastPaintKey = "";
     let petTimeout: ReturnType<typeof setTimeout> | undefined;
     let disposed = false;
 
@@ -168,6 +180,7 @@ export default function App() {
       canvas.height = window.innerHeight;
       groundY = canvas.height - SIZE - 10;
       y = Math.min(y, groundY);
+      lastPaintKey = ""; // resizing clears the canvas, force a repaint
     };
     resize();
     window.addEventListener("resize", resize);
@@ -310,9 +323,16 @@ export default function App() {
       // safety clamp: never let cat go below screen
       y = Math.max(0, Math.min(y, groundY));
 
+      // repaint only when pixels can actually change - constant repainting
+      // of a transparent window keeps the compositor busy and feels laggy
+      const paintKey = `${state}:${frame}:${Math.round(x)}:${Math.round(y)}`;
+      if (paintKey === lastPaintKey) return;
+      lastPaintKey = paintKey;
+
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       const img = images[state];
       if (img.complete) {
+        ctx.imageSmoothingEnabled = false;
         ctx.drawImage(img, frame * 64, 0, 64, 64, x, y, SIZE, SIZE);
       }
     };
@@ -387,10 +407,13 @@ export default function App() {
     } catch (error) {
       console.error("Could not save profile", error);
     }
-    if (startWithWindows && window.desktopBuddy) {
+    // login-item registration is a first-run choice only; renaming never
+    // silently re-applies (or ignores) the startup checkbox
+    if (!renaming && window.desktopBuddy?.isPackaged && startWithWindows) {
       window.desktopBuddy.setLoginItem(true);
     }
     setProfile(saved);
+    setRenaming(false);
     setWelcome(
       saved.yourName
         ? `meow! i'm ${saved.petName}. hi, ${saved.yourName}!`
@@ -401,11 +424,11 @@ export default function App() {
 
   if (profile === undefined) return null;
 
-  if (profile === null) {
+  if (profile === null || renaming) {
     return (
       <div style={{ width: "100vw", height: "100vh", display: "grid", placeItems: "center" }}>
         <form style={onboardingStyle} onSubmit={(event) => void finishSetup(event)}>
-          <strong>🐾 hi! i'm your new buddy</strong>
+          <strong>{renaming ? "✏️ let's tweak my name" : "🐾 hi! i'm your new buddy"}</strong>
           <label>
             name me
             <input
@@ -425,7 +448,7 @@ export default function App() {
               onChange={(event) => setYourName(event.target.value)}
             />
           </label>
-          {window.desktopBuddy?.isPackaged && (
+          {window.desktopBuddy?.isPackaged && !renaming && (
             <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12 }}>
               <input
                 type="checkbox"
@@ -435,7 +458,12 @@ export default function App() {
               start me when my computer turns on
             </label>
           )}
-          <button type="submit">let's go ✨</button>
+          <button type="submit">{renaming ? "save ✨" : "let's go ✨"}</button>
+          {renaming && (
+            <button type="button" onClick={() => setRenaming(false)}>
+              cancel
+            </button>
+          )}
         </form>
       </div>
     );
@@ -486,6 +514,12 @@ export default function App() {
               setSleepOpen(true);
               setMenuOpen(false);
             }}>🌙 Sleep</button>
+            <button onClick={() => {
+              setPetName(profile.petName);
+              setYourName(profile.yourName);
+              setRenaming(true);
+              setMenuOpen(false);
+            }}>✏️ Rename</button>
             <button onClick={() => window.desktopBuddy?.exitApp()}>✕ Exit</button>
             <button onClick={() => setMenuOpen(false)}>× Close</button>
           </div>
