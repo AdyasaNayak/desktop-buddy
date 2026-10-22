@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { db, type Reminder } from "./db";
+import { db, type Profile, type Reminder } from "./db";
 import idleSheet from "./assets/cat.png";
 import heartSheet from "./assets/catheart.png";
 import drinkSheet from "./assets/catdrink.png";
@@ -15,6 +15,8 @@ declare global {
       scheduleReminder: (id: number, text: string, remindAt: number) => void;
       cancelReminder: (id: number) => void;
       onReminder: (callback: (id: number) => void) => () => void;
+      setLoginItem: (openAtLogin: boolean) => boolean;
+      isPackaged: boolean;
     };
   }
 }
@@ -51,6 +53,32 @@ export default function App() {
     toDateTimeLocalValue(new Date(Date.now() + 60000)),
   );
   const [sleepMinutes, setSleepMinutes] = useState("15");
+  // undefined = still loading, null = first run (show setup)
+  const [profile, setProfile] = useState<Profile | null | undefined>(undefined);
+  const [petName, setPetName] = useState("");
+  const [yourName, setYourName] = useState("");
+  const [startWithWindows, setStartWithWindows] = useState(true);
+  const [welcome, setWelcome] = useState<string | null>(null);
+  const showSetup = profile === null;
+  // true once a profile exists (or is created) and the pet view can mount
+  const petReady = profile !== undefined && !showSetup;
+
+  useEffect(() => {
+    let active = true;
+    const loadProfile = async () => {
+      try {
+        await db.open();
+        const saved = await db.profiles.get("me");
+        if (active) setProfile(saved ?? null);
+      } catch {
+        if (active) setProfile(null);
+      }
+    };
+    void loadProfile();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -97,7 +125,10 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const canvas = canvasRef.current!;
+    // the canvas only exists once a profile is loaded/created
+    if (!petReady) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
     const ctx = canvas.getContext("2d")!;
 
     const images: Record<PetState, HTMLImageElement> = {
@@ -303,7 +334,8 @@ export default function App() {
       if (petTimeout) clearTimeout(petTimeout);
       cancelAnimationFrame(raf);
     };
-  }, []);
+    // re-run when the pet view mounts (profile load / first-run setup handoff)
+  }, [petReady]);
 
   const addReminder = async () => {
     const remindAt = new Date(reminderAt).getTime();
@@ -342,9 +374,82 @@ export default function App() {
     setReminders((current) => current.filter((reminder) => reminder.id !== id));
   };
 
+  const finishSetup = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const saved: Profile = {
+      id: "me",
+      petName: petName.trim() || "Mochi",
+      yourName: yourName.trim(),
+      petType: "cat",
+    };
+    try {
+      await db.profiles.put(saved);
+    } catch (error) {
+      console.error("Could not save profile", error);
+    }
+    if (startWithWindows && window.desktopBuddy) {
+      window.desktopBuddy.setLoginItem(true);
+    }
+    setProfile(saved);
+    setWelcome(
+      saved.yourName
+        ? `meow! i'm ${saved.petName}. hi, ${saved.yourName}!`
+        : `meow! i'm ${saved.petName}. i live here now.`,
+    );
+    window.setTimeout(() => setWelcome(null), 6000);
+  };
+
+  if (profile === undefined) return null;
+
+  if (profile === null) {
+    return (
+      <div style={{ width: "100vw", height: "100vh", display: "grid", placeItems: "center" }}>
+        <form style={onboardingStyle} onSubmit={(event) => void finishSetup(event)}>
+          <strong>🐾 hi! i'm your new buddy</strong>
+          <label>
+            name me
+            <input
+              autoFocus
+              placeholder="e.g. Mochi"
+              maxLength={20}
+              value={petName}
+              onChange={(event) => setPetName(event.target.value)}
+            />
+          </label>
+          <label>
+            and what should i call you?
+            <input
+              placeholder="your name (optional)"
+              maxLength={20}
+              value={yourName}
+              onChange={(event) => setYourName(event.target.value)}
+            />
+          </label>
+          {window.desktopBuddy?.isPackaged && (
+            <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12 }}>
+              <input
+                type="checkbox"
+                checked={startWithWindows}
+                onChange={(event) => setStartWithWindows(event.target.checked)}
+              />
+              start me when my computer turns on
+            </label>
+          )}
+          <button type="submit">let's go ✨</button>
+        </form>
+      </div>
+    );
+  }
+
   return (
     <div style={{ position: "relative", width: "100vw", height: "100vh" }}>
       <canvas ref={canvasRef} style={{ display: "block" }} />
+
+      {welcome && (
+        <div style={{ position: "absolute", top: 8, left: 8, maxWidth: 250 }}>
+          <div style={welcomeStyle}>{welcome}</div>
+        </div>
+      )}
 
       <div style={{ position: "absolute", top: 8, right: 8, zIndex: 10 }}>
         {menuOpen && (
@@ -459,6 +564,23 @@ export default function App() {
   );
 }
 
+const onboardingStyle = {
+  display: "grid",
+  gap: 8,
+  width: 280,
+  padding: 16,
+  borderRadius: 14,
+  background: "rgba(255, 248, 231, 0.98)",
+  boxShadow: "0 5px 20px rgba(50, 35, 20, 0.24)",
+  fontSize: 13,
+};
+const welcomeStyle = {
+  padding: "8px 12px",
+  borderRadius: 12,
+  background: "rgba(255, 248, 231, 0.96)",
+  boxShadow: "0 4px 16px rgba(50, 35, 20, 0.2)",
+  fontSize: 12,
+};
 const dialogStyle = {
   position: "absolute" as const,
   inset: 0,
