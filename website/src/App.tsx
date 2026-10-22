@@ -39,7 +39,7 @@ const FAQS: { q: string; a: string }[] = [
   },
   {
     q: "Which platforms does it run on?",
-    a: "Windows right now. macOS and Linux versions are on the way — the cat is still learning to walk on other roofs.",
+    a: "Windows right now. macOS and Linux versions are on the way - the cat is still learning to walk on other roofs.",
   },
   {
     q: "Will it slow my computer down?",
@@ -51,7 +51,7 @@ const FAQS: { q: string; a: string }[] = [
   },
   {
     q: "Can I give the cat a name?",
-    a: "Of course. Once it moves in, you can name it — and name yourself too. Cats forget nothing, except maybe Tuesdays.",
+    a: "Of course. Once it moves in, you can name it - and name yourself too. Cats forget nothing, except maybe Tuesdays.",
   },
   {
     q: "How do I report a bug or ask something?",
