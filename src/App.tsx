@@ -1,9 +1,25 @@
 import { useEffect, useRef, useState } from "react";
 import { db, type Profile, type Reminder } from "./db";
-import idleSheet from "./assets/cat.png";
-import heartSheet from "./assets/catheart.png";
-import drinkSheet from "./assets/catdrink.png";
-import workSheet from "./assets/catwork.png";
+import catIdle from "./assets/cat.png";
+import catHeart from "./assets/catheart.png";
+import catDrink from "./assets/catdrink.png";
+import catWork from "./assets/catwork.png";
+import dogIdle from "./assets/dog.png";
+import dogHeart from "./assets/dogheart.png";
+import dogDrink from "./assets/dogdrink.png";
+import dogWork from "./assets/dogwork.png";
+import starIdle from "./assets/star.png";
+import starHeart from "./assets/starheart.png";
+import starDrink from "./assets/stardrink.png";
+import starWork from "./assets/starwork.png";
+import hamsterIdle from "./assets/hamster.png";
+import hamsterHeart from "./assets/hamsterheart.png";
+import hamsterDrink from "./assets/hamsterdrink.png";
+import hamsterWork from "./assets/hamsterwork.png";
+import jellyIdle from "./assets/jelly.png";
+import jellyHeart from "./assets/jellyheart.png";
+import jellyDrink from "./assets/jellydrink.png";
+import jellyWork from "./assets/jellywork.png";
 
 declare global {
   interface Window {
@@ -22,6 +38,38 @@ declare global {
 }
 
 type PetState = "idle" | "heart" | "drink" | "work";
+type PetType = "cat" | "dog" | "star" | "hamster" | "jelly";
+
+// every buddy shares the same sheet layout: idle 3 frames, heart/drink 2, work 3
+const PET_SHEETS: Record<PetType, Record<PetState, string>> = {
+  cat: { idle: catIdle, heart: catHeart, drink: catDrink, work: catWork },
+  dog: { idle: dogIdle, heart: dogHeart, drink: dogDrink, work: dogWork },
+  star: { idle: starIdle, heart: starHeart, drink: starDrink, work: starWork },
+  hamster: { idle: hamsterIdle, heart: hamsterHeart, drink: hamsterDrink, work: hamsterWork },
+  jelly: { idle: jellyIdle, heart: jellyHeart, drink: jellyDrink, work: jellyWork },
+};
+
+const PET_TYPES = Object.keys(PET_SHEETS) as PetType[];
+
+const PET_GREETING: Record<PetType, string> = {
+  cat: "meow",
+  dog: "woof",
+  star: "twinkle",
+  hamster: "squeak",
+  jelly: "blub",
+};
+
+const PET_DEFAULT_NAME: Record<PetType, string> = {
+  cat: "Mochi",
+  dog: "Biscuit",
+  star: "Twinkle",
+  hamster: "Peanut",
+  jelly: "Bloopy",
+};
+
+function toPetType(value: string): PetType {
+  return (PET_TYPES as string[]).includes(value) ? (value as PetType) : "cat";
+}
 
 const SIZE = 160; // draw size - bigger = larger cat
 
@@ -57,6 +105,7 @@ export default function App() {
   const [profile, setProfile] = useState<Profile | null | undefined>(undefined);
   const [petName, setPetName] = useState("");
   const [yourName, setYourName] = useState("");
+  const [petType, setPetType] = useState<PetType>("cat");
   const [startWithWindows, setStartWithWindows] = useState(true);
   const [renaming, setRenaming] = useState(false);
   const [welcome, setWelcome] = useState<string | null>(null);
@@ -138,10 +187,11 @@ export default function App() {
       drink: new Image(),
       work: new Image(),
     };
-    images.idle.src = idleSheet;
-    images.heart.src = heartSheet;
-    images.drink.src = drinkSheet;
-    images.work.src = workSheet;
+    const sheets = PET_SHEETS[toPetType(profile.petType)];
+    images.idle.src = sheets.idle;
+    images.heart.src = sheets.heart;
+    images.drink.src = sheets.drink;
+    images.work.src = sheets.work;
     // a sheet finishing after an earlier empty paint must invalidate the cache
     images.heart.onload = () => {
       lastPaintKey = "";
@@ -355,7 +405,7 @@ export default function App() {
       cancelAnimationFrame(raf);
     };
     // re-run when the pet view mounts (profile load / first-run setup handoff)
-  }, [petReady]);
+  }, [petReady, profile?.petType]);
 
   const addReminder = async () => {
     const remindAt = new Date(reminderAt).getTime();
@@ -398,9 +448,9 @@ export default function App() {
     event.preventDefault();
     const saved: Profile = {
       id: "me",
-      petName: petName.trim() || "Mochi",
+      petName: petName.trim() || PET_DEFAULT_NAME[petType],
       yourName: yourName.trim(),
-      petType: "cat",
+      petType,
     };
     try {
       await db.profiles.put(saved);
@@ -414,10 +464,11 @@ export default function App() {
     }
     setProfile(saved);
     setRenaming(false);
+    const greeting = PET_GREETING[petType];
     setWelcome(
       saved.yourName
-        ? `meow! i'm ${saved.petName}. hi, ${saved.yourName}!`
-        : `meow! i'm ${saved.petName}. i live here now.`,
+        ? `${greeting}! i'm ${saved.petName}. hi, ${saved.yourName}!`
+        : `${greeting}! i'm ${saved.petName}. i live here now.`,
     );
     window.setTimeout(() => setWelcome(null), 6000);
   };
@@ -428,12 +479,13 @@ export default function App() {
     return (
       <div style={{ width: "100vw", height: "100vh", display: "grid", placeItems: "center" }}>
         <form style={onboardingStyle} onSubmit={(event) => void finishSetup(event)}>
-          <strong>{renaming ? "✏️ let's tweak my name" : "🐾 hi! i'm your new buddy"}</strong>
+          <strong>{renaming ? "✏️ let's tweak me" : "🐾 hi! i'm your new buddy"}</strong>
+          <PetTypePicker value={petType} onChange={setPetType} />
           <label>
             name me
             <input
               autoFocus
-              placeholder="e.g. Mochi"
+              placeholder={`e.g. ${PET_DEFAULT_NAME[petType]}`}
               maxLength={20}
               value={petName}
               onChange={(event) => setPetName(event.target.value)}
@@ -517,6 +569,7 @@ export default function App() {
             <button onClick={() => {
               setPetName(profile.petName);
               setYourName(profile.yourName);
+              setPetType(toPetType(profile.petType));
               setRenaming(true);
               setMenuOpen(false);
             }}>✏️ Rename</button>
@@ -646,4 +699,68 @@ function toDateTimeLocalValue(date: Date) {
     `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
     `${pad(date.getHours())}:${pad(date.getMinutes())}`,
   ].join("T");
+}
+
+// draws frame 0 of a pet's idle sheet, cropped to the sprite, scaled up crisply
+function PetSprite({ type, size }: { type: PetType; size: number }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const canvas = ref.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const img = new Image();
+    img.src = PET_SHEETS[type].idle;
+    img.onload = () => {
+      ctx.imageSmoothingEnabled = false;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // all buddies live in roughly the same 36x32 window of the 64px frame
+      ctx.drawImage(img, 6, 22, 36, 32, 0, 0, canvas.width, canvas.height);
+    };
+  }, [type]);
+  return (
+    <canvas
+      ref={ref}
+      width={size}
+      height={Math.round((size * 32) / 36)}
+      style={{ imageRendering: "pixelated" }}
+    />
+  );
+}
+
+function PetTypePicker({
+  value,
+  onChange,
+}: {
+  value: PetType;
+  onChange: (type: PetType) => void;
+}) {
+  return (
+    <div role="radiogroup" aria-label="pick your buddy" style={{ display: "flex", gap: 4 }}>
+      {PET_TYPES.map((type) => (
+        <button
+          key={type}
+          type="button"
+          role="radio"
+          aria-checked={value === type}
+          onClick={() => onChange(type)}
+          style={{
+            flex: 1,
+            display: "grid",
+            justifyItems: "center",
+            gap: 2,
+            padding: "4px 2px",
+            fontSize: 11,
+            cursor: "pointer",
+            border: value === type ? "2px solid #5b7da3" : "2px solid transparent",
+            borderRadius: 8,
+            background: value === type ? "#eef4fb" : "transparent",
+          }}
+        >
+          <PetSprite type={type} size={34} />
+          {type}
+        </button>
+      ))}
+    </div>
+  );
 }
