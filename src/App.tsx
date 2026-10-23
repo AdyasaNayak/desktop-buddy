@@ -806,9 +806,9 @@ export default function App() {
                 {waterMl} / {waterGoal} ml · {glasses} of {goalGlasses} glasses today
               </small>
               <div style={{ display: "flex", gap: 4 }}>
-                <button onClick={() => void logWater(100)}>sip +100</button>
-                <button onClick={() => void logWater(250)}>cup +250</button>
-                <button onClick={() => void logWater(500)}>bottle +500</button>
+                <button onClick={() => void logWater(100)}>+100 ml</button>
+                <button onClick={() => void logWater(250)}>+250 ml</button>
+                <button onClick={() => void logWater(500)}>+500 ml</button>
               </div>
               {waterLast && (
                 <button onClick={() => void undoWater()}>↩ undo last sip</button>
