@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld("desktopBuddy", {
   setLoginItem: (openAtLogin) => ipcRenderer.sendSync("set-login-item", openAtLogin),
   scheduleReminder: (id, text, remindAt) => ipcRenderer.send("schedule-reminder", id, text, remindAt),
   cancelReminder: (id) => ipcRenderer.send("cancel-reminder", id),
+  notify: (title, body) => ipcRenderer.send("notify", title, body),
   onReminder: (callback) => {
     const listener = (_event, id) => callback(id);
     ipcRenderer.on("reminder-fired", listener);

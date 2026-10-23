@@ -5,6 +5,9 @@ export interface Profile {
   petName: string;
   yourName: string;
   petType: string;
+  // daily water-intake settings (optional so older profiles keep loading)
+  waterGoalMl?: number;
+  waterNudge?: boolean;
 }
 
 export interface WaterEntry {

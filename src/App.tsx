@@ -33,6 +33,7 @@ declare global {
       onReminder: (callback: (id: number) => void) => () => void;
       setLoginItem: (openAtLogin: boolean) => boolean;
       isPackaged: boolean;
+      notify: (title: string, body: string) => void;
     };
   }
 }
@@ -66,6 +67,42 @@ const PET_DEFAULT_NAME: Record<PetType, string> = {
   hamster: "Peanut",
   jelly: "Bloopy",
 };
+
+// ---------- water intake ----------
+const WATER_NUDGE_MS = 45 * 60 * 1000;
+const DEFAULT_WATER_GOAL_ML = 2000;
+const WATER_CHEERS = [
+  "sip sip hooray! 💧",
+  "glug glug~ that's the sound of you being awesome!",
+  "splish splash! every sip makes your fur shinier!",
+  "hydration level: rising! keep it up! ⬆",
+  "yaaay! your body just did a little happy dance!",
+  "one small sip for you, one giant leap for feeling great!",
+  "*paw five!* that's the way! 💪",
+];
+const WATER_GOAL_CHEERS = [
+  "GOAL SMASHED! 🏆 i'm doing a happy dance right now!",
+  "you did it! fully hydrated and fabulous! 💙",
+  "daily goal complete! i'm telling EVERYONE in the treehouse!",
+];
+const WATER_NUDGES = [
+  "psst… it's been 45 minutes. sip sip time! 💧",
+  "drip drip… your water glass misses you!",
+  "hydration check! grab your glass — i'll wait! 🥤",
+  "even cacti drink water. just saying~",
+  "a wild glass of water appears! what will you do?",
+  "quick! a sip for you, a smile for me! 😊",
+  "your buddy refilled your glass. no excuses now!",
+];
+
+function randomOf<T>(list: T[]): T {
+  return list[Math.floor(Math.random() * list.length)];
+}
+
+function todayKey(now = new Date()) {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
 
 function toPetType(value: string): PetType {
   return (PET_TYPES as string[]).includes(value) ? (value as PetType) : "cat";
@@ -108,10 +145,26 @@ export default function App() {
   const [petType, setPetType] = useState<PetType>("cat");
   const [startWithWindows, setStartWithWindows] = useState(true);
   const [renaming, setRenaming] = useState(false);
-  const [welcome, setWelcome] = useState<string | null>(null);
+  const [speech, setSpeech] = useState<string | null>(null);
+  // water log
+  const [waterOpen, setWaterOpen] = useState(false);
+  const [waterMl, setWaterMl] = useState(0);
+  const [waterLast, setWaterLast] = useState<{ id: number; amount: number } | null>(null);
+  const [goalInput, setGoalInput] = useState(String(DEFAULT_WATER_GOAL_ML));
+  const speechTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const waterAnchorRef = useRef<number | undefined>(undefined);
   const showSetup = profile === null;
   // true once a profile exists (or is created), no form is shown, and the pet view can mount
   const petReady = profile !== undefined && !showSetup && !renaming;
+  const waterGoal = profile?.waterGoalMl ?? DEFAULT_WATER_GOAL_ML;
+  const waterNudgeOn = profile?.waterNudge ?? true;
+
+  // one speech bubble at a time; new lines replace the old one
+  const say = (line: string, ms = 6000) => {
+    setSpeech(line);
+    if (speechTimeout.current) clearTimeout(speechTimeout.current);
+    speechTimeout.current = setTimeout(() => setSpeech(null), ms);
+  };
 
   useEffect(() => {
     let active = true;
@@ -173,6 +226,112 @@ export default function App() {
       unsubscribe?.();
     };
   }, []);
+
+  // today's water entries (date-keyed, so the log resets at midnight)
+  const readTodayWater = async () => {
+    const entries = await db.water.where("date").equals(todayKey()).sortBy("ts");
+    return {
+      total: entries.reduce((sum, entry) => sum + entry.amount, 0),
+      last: entries.at(-1),
+    };
+  };
+
+  const applyTodayWater = (today: Awaited<ReturnType<typeof readTodayWater>>) => {
+    setWaterMl(today.total);
+    setWaterLast(today.last?.id !== undefined ? { id: today.last.id, amount: today.last.amount } : null);
+  };
+
+  // the log resets at midnight: watch the calendar day and refresh on rollover
+  const [waterDay, setWaterDay] = useState(() => todayKey());
+  useEffect(() => {
+    const watchDay = window.setInterval(() => {
+      const now = todayKey();
+      setWaterDay((day) => (day === now ? day : now));
+    }, 30000);
+    return () => window.clearInterval(watchDay);
+  }, []);
+
+  useEffect(() => {
+    const loadWater = async () => {
+      applyTodayWater(await readTodayWater());
+    };
+    void loadWater();
+  }, [waterDay]);
+
+  const notify = (title: string, body: string) => {
+    if (window.desktopBuddy) {
+      window.desktopBuddy.notify(title, body);
+    } else if ("Notification" in window && Notification.permission === "granted") {
+      new Notification(title, { body });
+    }
+  };
+
+  const logWater = async (amount: number) => {
+    try {
+      await db.open();
+      await db.water.add({ date: todayKey(), amount, ts: Date.now() });
+      const before = waterMl;
+      applyTodayWater(await readTodayWater());
+      waterAnchorRef.current = Date.now(); // a fresh sip also restarts the nudge timer
+      controlRef.current.drinkLeft = 2200; // buddy drinks along with you
+      say(waterMl + amount >= waterGoal && before < waterGoal ? randomOf(WATER_GOAL_CHEERS) : randomOf(WATER_CHEERS));
+    } catch (error) {
+      console.error("Could not save water entry", error);
+    }
+  };
+
+  const undoWater = async () => {
+    if (!waterLast) return;
+    await db.water.delete(waterLast.id);
+    applyTodayWater(await readTodayWater());
+  };
+
+  const saveGoal = async () => {
+    const goal = Number.parseInt(goalInput, 10);
+    if (!Number.isFinite(goal) || goal < 500 || goal > 10000) {
+      say("hmm, pick a goal between 500 and 10000 ml! 💧");
+      return;
+    }
+    if (!profile) return;
+    const saved = { ...profile, waterGoalMl: goal };
+    try {
+      await db.profiles.put(saved);
+      setProfile(saved);
+      say(`goal set to ${goal} ml! we've got this! 💪`);
+    } catch (error) {
+      console.error("Could not save water goal", error);
+    }
+  };
+
+  const toggleNudge = async (checked: boolean) => {
+    if (!profile) return;
+    const saved = { ...profile, waterNudge: checked };
+    try {
+      await db.profiles.put(saved);
+      setProfile(saved);
+    } catch (error) {
+      console.error("Could not save water nudge setting", error);
+    }
+    if (checked && !window.desktopBuddy && "Notification" in window && Notification.permission === "default") {
+      void Notification.requestPermission().catch(() => undefined);
+    }
+    if (checked) say("okay! i'll remind you every 45 minutes! ⏰💧");
+  };
+
+  // gentle water nudges every 45 minutes while the buddy is awake
+  useEffect(() => {
+    if (!petReady || !waterNudgeOn) return;
+    waterAnchorRef.current ??= Date.now();
+    const tick = window.setInterval(() => {
+      if (Date.now() - (waterAnchorRef.current ?? 0) < WATER_NUDGE_MS) return;
+      waterAnchorRef.current = Date.now();
+      const line = randomOf(WATER_NUDGES);
+      say(line, 8000);
+      controlRef.current.drinkLeft = 2500;
+      notify("Desktop Buddy", line);
+    }, 30000);
+    return () => window.clearInterval(tick);
+  }, [petReady, waterNudgeOn]);
 
   useEffect(() => {
     // the canvas only exists once a profile is loaded/created
@@ -447,6 +606,7 @@ export default function App() {
   const finishSetup = async (event: React.FormEvent) => {
     event.preventDefault();
     const saved: Profile = {
+      ...(profile ?? {}),
       id: "me",
       petName: petName.trim() || PET_DEFAULT_NAME[petType],
       yourName: yourName.trim(),
@@ -465,12 +625,11 @@ export default function App() {
     setProfile(saved);
     setRenaming(false);
     const greeting = PET_GREETING[petType];
-    setWelcome(
+    say(
       saved.yourName
         ? `${greeting}! i'm ${saved.petName}. hi, ${saved.yourName}!`
         : `${greeting}! i'm ${saved.petName}. i live here now.`,
     );
-    window.setTimeout(() => setWelcome(null), 6000);
   };
 
   if (profile === undefined) return null;
@@ -525,9 +684,9 @@ export default function App() {
     <div style={{ position: "relative", width: "100vw", height: "100vh" }}>
       <canvas ref={canvasRef} style={{ display: "block" }} />
 
-      {welcome && (
+      {speech && (
         <div style={{ position: "absolute", top: 8, left: 8, maxWidth: 250 }}>
-          <div style={welcomeStyle}>{welcome}</div>
+          <div style={welcomeStyle}>{speech}</div>
         </div>
       )}
 
@@ -546,9 +705,10 @@ export default function App() {
             }}
           >
             <button onClick={() => {
-              controlRef.current.drinkLeft = 2000;
+              setGoalInput(String(profile.waterGoalMl ?? DEFAULT_WATER_GOAL_ML));
+              setWaterOpen(true);
               setMenuOpen(false);
-            }}>💧 Drink water</button>
+            }}>💧 Water log</button>
             <button
               onClick={() => {
                 controlRef.current.work = !controlRef.current.work;
@@ -622,6 +782,62 @@ export default function App() {
         </div>
       )}
 
+      {waterOpen && (() => {
+        const pct = Math.min(100, Math.round((waterMl / waterGoal) * 100));
+        const glasses = Math.round(waterMl / 250);
+        const goalGlasses = Math.max(1, Math.round(waterGoal / 250));
+        const status =
+          waterMl === 0
+            ? "not a single sip yet! your glass is feeling lonely…"
+            : pct < 50
+              ? "every sip counts — keep going! 💧"
+              : pct < 100
+                ? "so close! i believe in you!"
+                : "goal smashed! i'm SO proud of you! 🏆";
+        return (
+          <div style={dialogStyle}>
+            <div style={{ ...panelStyle, width: 252, boxSizing: "border-box", maxHeight: "calc(100vh - 16px)", overflowY: "auto" }}>
+              <strong>💧 water log</strong>
+              <small style={waterStatusStyle}>{status}</small>
+              <div style={waterTrackStyle} role="progressbar" aria-valuenow={waterMl} aria-valuemin={0} aria-valuemax={waterGoal} aria-label="today's water intake">
+                <div style={{ ...waterFillStyle, width: `${pct}%` }} />
+              </div>
+              <small style={{ textAlign: "center" }}>
+                {waterMl} / {waterGoal} ml · {glasses} of {goalGlasses} glasses today
+              </small>
+              <div style={{ display: "flex", gap: 4 }}>
+                <button onClick={() => void logWater(100)}>sip +100</button>
+                <button onClick={() => void logWater(250)}>cup +250</button>
+                <button onClick={() => void logWater(500)}>bottle +500</button>
+              </div>
+              {waterLast && (
+                <button onClick={() => void undoWater()}>↩ undo last sip</button>
+              )}
+              <label>
+                my daily goal (ml)
+                <div style={{ display: "flex", gap: 4 }}>
+                  <input
+                    inputMode="numeric"
+                    value={goalInput}
+                    onChange={(event) => setGoalInput(event.target.value.replace(/[^0-9]/g, ""))}
+                  />
+                  <button type="button" onClick={() => void saveGoal()}>save</button>
+                </div>
+              </label>
+              <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12 }}>
+                <input
+                  type="checkbox"
+                  checked={waterNudgeOn}
+                  onChange={(event) => void toggleNudge(event.target.checked)}
+                />
+                nudge me every 45 minutes
+              </label>
+              <button onClick={() => setWaterOpen(false)}>close</button>
+            </div>
+          </div>
+        );
+      })()}
+
       {sleepOpen && (
         <div style={dialogStyle}>
           <div style={panelStyle}>
@@ -691,6 +907,19 @@ const reminderStyle = {
   alignItems: "center",
   gap: 8,
   padding: "3px 0",
+};
+const waterStatusStyle = { textAlign: "center" as const, lineHeight: 1.4 };
+const waterTrackStyle = {
+  height: 12,
+  borderRadius: 6,
+  background: "#dfe9f6",
+  overflow: "hidden" as const,
+};
+const waterFillStyle = {
+  height: "100%",
+  borderRadius: 6,
+  background: "linear-gradient(180deg, #7db4f0, #4a8fe0)",
+  transition: "width 240ms ease",
 };
 
 function toDateTimeLocalValue(date: Date) {

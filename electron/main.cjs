@@ -93,6 +93,11 @@ ipcMain.on("cancel-reminder", (_event, id) => {
   }
 });
 
+ipcMain.on("notify", (_event, title, body) => {
+  if (typeof title !== "string" || typeof body !== "string") return;
+  new Notification({ title, body }).show();
+});
+
 app.whenReady().then(() => {
   createWindow();
 
