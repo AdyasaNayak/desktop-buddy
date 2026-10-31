@@ -30,6 +30,13 @@ export interface PetDefinition {
 
 export const PET_TYPES: PetType[] = ["cat", "star", "hamster", "jellyfish"];
 
+/** Sprite preview height in CSS pixels for picker tiles and the setup stage. */
+export const PET_PREVIEW_SIZE: Record<PetType, { card: number; stage: number }> = {
+  cat: { card: 52, stage: 88 },
+  star: { card: 40, stage: 72 },
+  hamster: { card: 46, stage: 80 },
+};
+
 export const PETS: Record<PetType, PetDefinition> = {
   cat: {
     label: "cat",
