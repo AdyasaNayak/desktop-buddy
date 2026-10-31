@@ -12,7 +12,7 @@
     "dev:electron": "wait-on http://localhost:5173 && electron .",
     "desktop": "concurrently -k \"npm:dev:web\" \"npm:dev:electron\"",
     "build": "tsc -b && vite build",
-    "dist": "npm run build && electron-builder --win",
+    "dist": "npm run build && electron-builder --win --publish never",
     "start": "electron . --production",
     "lint": "oxlint",
     "preview": "vite preview"
