@@ -1,11 +1,15 @@
 import { useEffect, useRef, useState } from "react";
+import "./App.css";
 import { db, type Profile, type Reminder } from "./db";
-import { PETS, PET_TYPES, toPetType, type PetState, type PetType } from "./pets";
+import { Onboarding, type OnboardingResult } from "./Onboarding";
+import { PetPreview } from "./PetPreview";
+import { PETS, PET_PREVIEW_SIZE, PET_TYPES, toPetType, type PetState, type PetType } from "./pets";
 
 declare global {
   interface Window {
     desktopBuddy?: {
       getWindowPosition: () => [number, number];
+      setWindowMode: (mode: "setup" | "pet") => void;
       moveWindow: (x: number, y: number) => void;
       sleepWindow: (duration: number) => void;
       exitApp: () => void;
@@ -37,21 +41,16 @@ export default function App() {
   const [sleepMinutes, setSleepMinutes] = useState("15");
   // undefined = still loading, null = first run (show setup)
   const [profile, setProfile] = useState<Profile | null | undefined>(undefined);
-  const [petName, setPetName] = useState("");
-  const [yourName, setYourName] = useState("");
-  const [startWithWindows, setStartWithWindows] = useState(true);
   const [renaming, setRenaming] = useState(false);
   const [welcome, setWelcome] = useState<string | null>(null);
-  const [petType, setPetType] = useState<PetType>("cat");
-  const [choosingPet, setChoosingPet] = useState(true);
   const [changingPet, setChangingPet] = useState(false);
   const positionRef = useRef<{ x: number; y: number } | null>(null);
   const welcomeTimer = useRef<number | null>(null);
   const showSetup = profile === null;
   // true once a profile exists (or is created), no form is shown, and the pet view can mount
   const petReady = profile !== undefined && !showSetup && !renaming;
-  const activePet = profile ? toPetType(profile.petType) : petType;
-  const shownPet = renaming && profile ? toPetType(profile.petType) : petType;
+  const activePet = profile ? toPetType(profile.petType) : "cat";
+  const windowMode = profile === undefined ? null : showSetup || renaming ? "setup" : "pet";
 
   useEffect(() => {
     let active = true;
@@ -71,6 +70,11 @@ export default function App() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!windowMode) return;
+    window.desktopBuddy?.setWindowMode(windowMode);
+  }, [windowMode]);
 
   useEffect(() => {
     return () => {
@@ -401,20 +405,19 @@ export default function App() {
     const greeting = PETS[pet].greeting;
     setWelcome(
       humanName
-        ? `${greeting} i'm ${name}. hi, ${humanName}!`
-        : `${greeting} i'm ${name}. i live here now.`,
+        ? `${greeting} i'm ${name}. hi, ${humanName}! click me for my menu.`
+        : `${greeting} i'm ${name}. i live here now. click me for my menu.`,
     );
     if (welcomeTimer.current !== null) window.clearTimeout(welcomeTimer.current);
     welcomeTimer.current = window.setTimeout(() => setWelcome(null), 6000);
   };
 
-  const finishSetup = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const saveProfile = async (result: OnboardingResult) => {
     const saved: Profile = {
       id: "me",
-      petName: petName.trim() || "Mochi",
-      yourName: yourName.trim(),
-      petType: renaming && profile ? toPetType(profile.petType) : petType,
+      petName: result.petName.trim() || "Mochi",
+      yourName: result.yourName.trim(),
+      petType: result.petType,
     };
     try {
       await db.profiles.put(saved);
@@ -423,7 +426,7 @@ export default function App() {
     }
     // login-item registration is a first-run choice only; renaming never
     // silently re-applies (or ignores) the startup checkbox
-    if (!renaming && window.desktopBuddy?.isPackaged && startWithWindows) {
+    if (result.startWithWindows && window.desktopBuddy?.isPackaged) {
       window.desktopBuddy.setLoginItem(true);
     }
     setProfile(saved);
@@ -447,92 +450,32 @@ export default function App() {
 
   if (profile === undefined) return null;
 
-  if (profile === null || renaming) {
-    if (!renaming && choosingPet) {
-      return (
-        <div style={centerStyle}>
-          <form
-            style={onboardingStyle}
-            onSubmit={(event) => {
-              event.preventDefault();
-              setChoosingPet(false);
-            }}
-          >
-            <strong>🐾 who's moving in?</strong>
-            <div style={{ display: "flex", gap: 8 }}>
-              {PET_TYPES.map((id) => (
-                <PetChoice
-                  key={id}
-                  pet={id}
-                  selected={petType === id}
-                  onClick={() => setPetType(id)}
-                />
-              ))}
-            </div>
-            <small style={{ color: "#7a6650", fontSize: 11, lineHeight: 1.3 }}>
-              all three buddies live in the same app. you can switch anytime from the menu.
-            </small>
-            <button type="submit">meet {PETS[petType].label} →</button>
-          </form>
-        </div>
-      );
-    }
+  const quitApp = window.desktopBuddy
+    ? () => window.desktopBuddy?.exitApp()
+    : undefined;
 
+  if (profile === null) {
     return (
-      <div style={centerStyle}>
-        <form style={onboardingStyle} onSubmit={(event) => void finishSetup(event)}>
-          <strong style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <PetPreview pet={shownPet} size={34} />
-            <span style={{ flex: 1 }}>
-              {renaming ? "✏️ let's tweak my name" : "hi! i'm your new buddy"}
-            </span>
-            {!renaming && (
-              <button
-                type="button"
-                onClick={() => setChoosingPet(true)}
-                style={changePetLinkStyle}
-              >
-                change
-              </button>
-            )}
-          </strong>
-          <label>
-            name me
-            <input
-              autoFocus
-              placeholder="e.g. Mochi"
-              maxLength={20}
-              value={petName}
-              onChange={(event) => setPetName(event.target.value)}
-            />
-          </label>
-          <label>
-            and what should i call you?
-            <input
-              placeholder="your name (optional)"
-              maxLength={20}
-              value={yourName}
-              onChange={(event) => setYourName(event.target.value)}
-            />
-          </label>
-          {window.desktopBuddy?.isPackaged && !renaming && (
-            <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12 }}>
-              <input
-                type="checkbox"
-                checked={startWithWindows}
-                onChange={(event) => setStartWithWindows(event.target.checked)}
-              />
-              start me when my computer turns on
-            </label>
-          )}
-          <button type="submit">{renaming ? "save ✨" : "let's go ✨"}</button>
-          {renaming && (
-            <button type="button" onClick={() => setRenaming(false)}>
-              cancel
-            </button>
-          )}
-        </form>
-      </div>
+      <Onboarding
+        mode="welcome"
+        initialPet="cat"
+        onSave={(result) => void saveProfile(result)}
+        onQuit={quitApp}
+      />
+    );
+  }
+
+  if (renaming) {
+    return (
+      <Onboarding
+        mode="rename"
+        initialPet={toPetType(profile.petType)}
+        initialPetName={profile.petName}
+        initialYourName={profile.yourName}
+        onSave={(result) => void saveProfile(result)}
+        onCancel={() => setRenaming(false)}
+        onQuit={quitApp}
+      />
     );
   }
 
@@ -541,98 +484,150 @@ export default function App() {
       <canvas ref={canvasRef} style={{ display: "block" }} />
 
       {welcome && (
-        <div style={{ position: "absolute", top: 8, left: 8, maxWidth: 250 }}>
-          <div style={welcomeStyle}>{welcome}</div>
+        <div style={{ position: "absolute", top: 8, left: 8, zIndex: 5 }}>
+          <div className="buddy-bubble">{welcome}</div>
         </div>
       )}
 
-      <div style={{ position: "absolute", top: 8, right: 8, zIndex: 10 }}>
+      <div style={{ position: "absolute", top: 8, left: 8, right: 8, zIndex: 10 }}>
         {menuOpen && (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: 6,
-              minWidth: 230,
-              padding: 8,
-              borderRadius: 12,
-              background: "rgba(255, 248, 231, 0.96)",
-              boxShadow: "0 4px 16px rgba(50, 35, 20, 0.2)",
-            }}
-          >
-            <button onClick={() => {
-              controlRef.current.drinkLeft = 2000;
-              setMenuOpen(false);
-            }}>💧 Drink water</button>
+          <div className="buddy-menu">
             <button
+              type="button"
+              className="buddy-menu__button"
+              onClick={() => {
+                controlRef.current.drinkLeft = 2000;
+                setMenuOpen(false);
+              }}
+            >
+              Drink water
+            </button>
+            <button
+              type="button"
+              className="buddy-menu__button"
               onClick={() => {
                 controlRef.current.work = !controlRef.current.work;
                 setWorkOn((prev) => !prev);
                 setMenuOpen(false);
               }}
             >
-              {workOn ? "💻 Stop work" : "💻 Work mode"}
+              {workOn ? "Stop work" : "Work mode"}
             </button>
-            <button onClick={() => {
-              setReminderOpen(true);
-              setMenuOpen(false);
-            }}>🔔 Reminders</button>
-            <button onClick={() => {
-              setSleepOpen(true);
-              setMenuOpen(false);
-            }}>🌙 Sleep</button>
-            <button onClick={() => {
-              setPetName(profile.petName);
-              setYourName(profile.yourName);
-              setPetType(toPetType(profile.petType));
-              setRenaming(true);
-              setMenuOpen(false);
-            }}>✏️ Rename</button>
-            <button onClick={() => {
-              setChangingPet(true);
-              setMenuOpen(false);
-            }}>🐾 Change pet</button>
-            <button onClick={() => window.desktopBuddy?.exitApp()}>✕ Exit</button>
-            <button onClick={() => setMenuOpen(false)}>× Close</button>
+            <button
+              type="button"
+              className="buddy-menu__button"
+              onClick={() => {
+                setReminderOpen(true);
+                setMenuOpen(false);
+              }}
+            >
+              Reminders
+            </button>
+            <button
+              type="button"
+              className="buddy-menu__button"
+              onClick={() => {
+                setSleepOpen(true);
+                setMenuOpen(false);
+              }}
+            >
+              Sleep
+            </button>
+            <button
+              type="button"
+              className="buddy-menu__button"
+              onClick={() => {
+                setRenaming(true);
+                setMenuOpen(false);
+              }}
+            >
+              Rename
+            </button>
+            <button
+              type="button"
+              className="buddy-menu__button"
+              onClick={() => {
+                setChangingPet(true);
+                setMenuOpen(false);
+              }}
+            >
+              Change pet
+            </button>
+            <button
+              type="button"
+              className="buddy-menu__button buddy-menu__button--exit"
+              onClick={() => window.desktopBuddy?.exitApp()}
+            >
+              Exit
+            </button>
+            <button
+              type="button"
+              className="buddy-menu__button"
+              onClick={() => setMenuOpen(false)}
+            >
+              Close
+            </button>
           </div>
         )}
       </div>
 
       {reminderOpen && (
-        <div style={dialogStyle}>
-          <div style={panelStyle}>
-            <strong>New reminder</strong>
+        <div className="buddy-dialog">
+          <div
+            className="buddy-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reminder-dialog-title"
+          >
+            <h2 id="reminder-dialog-title" className="buddy-panel__title">
+              New reminder
+            </h2>
             <form
+              className="buddy-panel__form"
               onSubmit={(event) => {
                 event.preventDefault();
                 void addReminder();
               }}
-              style={{ display: "grid", gap: 8 }}
             >
               <input
+                className="field__input"
                 autoFocus
-                placeholder="Reminder text"
+                aria-label="Reminder text"
+                placeholder="Remind me to…"
                 value={reminderText}
                 onChange={(event) => setReminderText(event.target.value)}
               />
               <input
+                className="field__input"
                 type="datetime-local"
+                aria-label="Reminder time"
                 min={minReminderAt}
                 value={reminderAt}
                 onChange={(event) => setReminderAt(event.target.value)}
               />
-              {reminderError && <small style={{ color: "#a33" }}>{reminderError}</small>}
-              <div style={buttonRowStyle}>
-                <button type="submit">Add</button>
-                <button type="button" onClick={() => setReminderOpen(false)}>Cancel</button>
+              {reminderError && <p className="buddy-panel__error">{reminderError}</p>}
+              <div className="buddy-panel__row">
+                <button className="btn btn--primary" type="submit">
+                  Add reminder
+                </button>
+                <button className="btn" type="button" onClick={() => setReminderOpen(false)}>
+                  Cancel
+                </button>
               </div>
             </form>
             {reminders.length > 0 && (
-              <div style={{ maxHeight: 70, overflowY: "auto", fontSize: 12 }}>
+              <div className="reminder-list">
                 {reminders.map((reminder) => (
-                  <div key={reminder.id} style={reminderStyle}>
+                  <div key={reminder.id} className="reminder-row">
                     <span>{reminder.text}</span>
-                    <button onClick={() => void removeReminder(reminder.id!)}>×</button>
+                    <button
+                      type="button"
+                      className="reminder-row__delete"
+                      aria-label={`Delete reminder: ${reminder.text}`}
+                      onClick={() => void removeReminder(reminder.id!)}
+                    >
+                      ×
+                    </button>
                   </div>
                 ))}
               </div>
@@ -642,12 +637,23 @@ export default function App() {
       )}
 
       {sleepOpen && (
-        <div style={dialogStyle}>
-          <div style={panelStyle}>
-            <strong>Put buddy to sleep</strong>
-            <label>
-              Wake after
-              <select value={sleepMinutes} onChange={(event) => setSleepMinutes(event.target.value)}>
+        <div className="buddy-dialog">
+          <div
+            className="buddy-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="sleep-dialog-title"
+          >
+            <h2 id="sleep-dialog-title" className="buddy-panel__title">
+              Put buddy to sleep
+            </h2>
+            <label className="field">
+              <span className="field__label">Wake after</span>
+              <select
+                className="field__input"
+                value={sleepMinutes}
+                onChange={(event) => setSleepMinutes(event.target.value)}
+              >
                 <option value="5">5 minutes</option>
                 <option value="15">15 minutes</option>
                 <option value="30">30 minutes</option>
@@ -655,23 +661,34 @@ export default function App() {
                 <option value="120">2 hours</option>
               </select>
             </label>
-            <div style={buttonRowStyle}>
+            <div className="buddy-panel__row">
               <button
+                type="button"
+                className="btn btn--primary"
                 onClick={() => window.desktopBuddy?.sleepWindow(Number(sleepMinutes) * 60 * 1000)}
               >
                 Sleep
               </button>
-              <button onClick={() => setSleepOpen(false)}>Cancel</button>
+              <button type="button" className="btn" onClick={() => setSleepOpen(false)}>
+                Cancel
+              </button>
             </div>
           </div>
         </div>
       )}
 
       {changingPet && (
-        <div style={dialogStyle}>
-          <div style={{ ...panelStyle, width: 260 }}>
-            <strong>who's moving in?</strong>
-            <div style={{ display: "flex", gap: 8 }}>
+        <div className="buddy-dialog">
+          <div
+            className="buddy-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pet-dialog-title"
+          >
+            <h2 id="pet-dialog-title" className="buddy-panel__title">
+              Who's moving in?
+            </h2>
+            <div className="pet-picker">
               {PET_TYPES.map((id) => (
                 <PetChoice
                   key={id}
@@ -681,41 +698,19 @@ export default function App() {
                 />
               ))}
             </div>
-            <button type="button" onClick={() => setChangingPet(false)}>cancel</button>
+            <button
+              type="button"
+              className="btn btn--ghost btn--block"
+              onClick={() => setChangingPet(false)}
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}
     </div>
   );
 }
-
-function PetPreview({ pet, size = 52 }: { pet: PetType; size?: number }) {
-  const definition = PETS[pet];
-  const frames = definition.frameCount.idle;
-  const win = definition.preview;
-  const scale = size / win.h;
-  return (
-    <div style={{ width: win.w * scale, height: size, overflow: "hidden", flex: "none" }}>
-      <div
-        className="pet-preview"
-        aria-hidden="true"
-        style={{
-          width: 64 * scale,
-          height: 64 * scale,
-          marginLeft: -win.x * scale,
-          marginTop: -win.y * scale,
-          backgroundImage: `url(${definition.sheets.idle})`,
-          backgroundSize: `${64 * scale * frames}px ${64 * scale}px`,
-          ["--pet-preview-frame-width" as string]: `${64 * scale}px`,
-          ["--pet-preview-frames" as string]: frames,
-          ["--pet-preview-duration" as string]: `${(frames * definition.frameMs.idle) / 1000}s`,
-        }}
-      />
-    </div>
-  );
-}
-
-const PET_CARD_PREVIEW: Record<PetType, number> = { cat: 52, star: 40, hamster: 46 };
 
 function PetChoice({
   pet,
@@ -729,103 +724,20 @@ function PetChoice({
   return (
     <button
       type="button"
+      className="pet-option"
       aria-pressed={selected}
       onClick={onClick}
-      style={{ ...petChoiceStyle, ...(selected ? petChoiceSelectedStyle : {}) }}
     >
-      <div style={petChoicePreviewStyle}>
-        <PetPreview pet={pet} size={PET_CARD_PREVIEW[pet]} />
-      </div>
+      <span className="pet-option__preview">
+        <PetPreview pet={pet} size={PET_PREVIEW_SIZE[pet].card} />
+      </span>
       <span>{PETS[pet].label}</span>
+      <span className="pet-option__badge" aria-hidden="true">
+        with me
+      </span>
     </button>
   );
 }
-
-const centerStyle = {
-  width: "100vw",
-  height: "100vh",
-  display: "grid",
-  placeItems: "center",
-};
-const onboardingStyle = {
-  display: "grid",
-  gap: 8,
-  width: 280,
-  maxHeight: "100vh",
-  overflowY: "auto" as const,
-  boxSizing: "border-box" as const,
-  padding: 16,
-  borderRadius: 14,
-  background: "rgba(255, 248, 231, 0.98)",
-  boxShadow: "0 5px 20px rgba(50, 35, 20, 0.24)",
-  fontSize: 13,
-};
-const changePetLinkStyle = {
-  border: "none",
-  background: "none",
-  padding: 0,
-  color: "#7a5a3a",
-  fontSize: 11,
-  fontWeight: 600,
-  fontFamily: "inherit",
-  textDecoration: "underline",
-  cursor: "pointer",
-};
-const petChoicePreviewStyle = {
-  width: "100%",
-  height: 52,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-};
-const petChoiceStyle = {
-  display: "grid",
-  justifyItems: "center",
-  flex: 1,
-  padding: "8px 4px",
-  borderRadius: 12,
-  border: "2px solid transparent",
-  background: "rgba(255, 255, 255, 0.5)",
-  color: "#4a3b2a",
-  fontFamily: "inherit",
-  fontSize: 12,
-  cursor: "pointer",
-};
-const petChoiceSelectedStyle = {
-  borderColor: "#b9895c",
-  background: "#fff1d0",
-};
-const welcomeStyle = {
-  padding: "8px 12px",
-  borderRadius: 12,
-  background: "rgba(255, 248, 231, 0.96)",
-  boxShadow: "0 4px 16px rgba(50, 35, 20, 0.2)",
-  fontSize: 12,
-};
-const dialogStyle = {
-  position: "absolute" as const,
-  inset: 0,
-  display: "grid",
-  placeItems: "center",
-  zIndex: 20,
-};
-const panelStyle = {
-  display: "grid",
-  gap: 8,
-  width: 220,
-  padding: 14,
-  borderRadius: 14,
-  background: "rgba(255, 248, 231, 0.98)",
-  boxShadow: "0 5px 20px rgba(50, 35, 20, 0.24)",
-};
-const buttonRowStyle = { display: "flex", gap: 6 };
-const reminderStyle = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: 8,
-  padding: "3px 0",
-};
 
 function toDateTimeLocalValue(date: Date) {
   const pad = (value: number) => String(value).padStart(2, "0");
