@@ -42,7 +42,7 @@ const BUBBLES: Record<PetType, string[]> = {
   hamster: [
     "squeak! your desktop smells like snacks.",
     "i can nibble, nap, and keep you company.",
-    "take me home. my cheeks are full of sunshine.",
+    "take me home. i will bring the sunflower seeds.",
     "your cursor looked lonely. i can fix that.",
     "i promise to remind you to drink water.",
   ],
@@ -55,15 +55,15 @@ const PET_CHOICES: { id: PetType; label: string }[] = [
 ];
 
 /** Each pet keeps its own scale so their real-world size stays consistent. */
-const NAV_SIZE: Record<PetType, number> = { cat: 30, star: 24, hamster: 26 };
-const HERO_SIZE: Record<PetType, number> = { cat: 132, star: 92, hamster: 96 };
-const CHIP_SIZE: Record<PetType, number> = { cat: 28, star: 18, hamster: 20 };
-const PEEK_SIZE: Record<PetType, number> = { cat: 62, star: 46, hamster: 52 };
+const NAV_SIZE: Record<PetType, number> = { cat: 30, star: 24, hamster: 24 };
+const HERO_SIZE: Record<PetType, number> = { cat: 132, star: 92, hamster: 92 };
+const CHIP_SIZE: Record<PetType, number> = { cat: 28, star: 18, hamster: 18 };
+const PEEK_SIZE: Record<PetType, number> = { cat: 62, star: 46, hamster: 46 };
 
 const FAQS: { q: string; a: string }[] = [
   {
     q: "Is Desktop Buddy really free?",
-    a: "Yes. Free and open source, forever. The cat works for head pats, the star runs on tea and compliments, and the hamster accepts payment in sunflower seeds.",
+    a: "Yes. Free and open source, forever. The cat works for head pats, the star runs on tea and compliments, and the hamster accepts sunflower seeds.",
   },
   {
     q: "Which platforms does it run on?",
@@ -83,7 +83,7 @@ const FAQS: { q: string; a: string }[] = [
   },
   {
     q: "Can I give my buddy a name?",
-    a: "Of course. Once it moves in, you can name it — and name yourself too. Cats forget nothing, except maybe Tuesdays. The star remembers everything. The hamster remembers where the snacks are.",
+    a: "Of course. Once it moves in, you can name it — and name yourself too. Cats forget nothing, except maybe Tuesdays. The star remembers everything, and the hamster is already writing it down.",
   },
   {
     q: "How do I report a bug or ask something?",
@@ -478,7 +478,7 @@ export default function App() {
           <PawIcon /> <HeartIcon /> <PawIcon />
         </p>
         <p className="footer-line">
-          made with love, cat naps, stardust, and sunflower seeds —{" "}
+          made with love, cat naps, a little stardust, and a pocket of seeds —{" "}
           <a href={REPO_URL}>desktop-buddy on GitHub</a>
         </p>
         <p className="footer-note">

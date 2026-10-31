@@ -64,9 +64,9 @@ export const PETS: Record<PetType, PetDefinition> = {
       work: hamsterWork,
     },
     frameCount: { idle: 3, heart: 2, drink: 2, work: 3 },
-    // Same calm pace as the star: between 1.25 and 1.67 fps.
-    frameMs: { idle: 600, heart: 700, drink: 800, work: 700 },
-    preview: { x: 7, y: 26, w: 30, h: 28 },
+    // Kept between 1 and 2 fps so the hamster stays calm and readable.
+    frameMs: { idle: 800, heart: 700, drink: 800, work: 700 },
+    preview: { x: 15, y: 19, w: 32, h: 32 },
   },
 };
 
