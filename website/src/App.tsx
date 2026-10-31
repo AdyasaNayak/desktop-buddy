@@ -39,17 +39,30 @@ const BUBBLES: Record<PetType, string[]> = {
     "your cursor looked lonely. i can fix that.",
     "i promise to remind you to drink water.",
   ],
+  hamster: [
+    "squeak! your desktop smells like snacks.",
+    "i can nibble, nap, and keep you company.",
+    "take me home. i will bring the sunflower seeds.",
+    "your cursor looked lonely. i can fix that.",
+    "i promise to remind you to drink water.",
+  ],
 };
 
 const PET_CHOICES: { id: PetType; label: string }[] = [
   { id: "cat", label: "cat" },
   { id: "star", label: "star" },
+  { id: "hamster", label: "hamster" },
 ];
+
+const NAV_PET_SIZE: Record<PetType, number> = { cat: 30, star: 24, hamster: 24 };
+const HERO_PET_SIZE: Record<PetType, number> = { cat: 132, star: 92, hamster: 92 };
+const CHIP_PET_SIZE: Record<PetType, number> = { cat: 28, star: 18, hamster: 18 };
+const CONTACT_PET_SIZE: Record<PetType, number> = { cat: 62, star: 46, hamster: 46 };
 
 const FAQS: { q: string; a: string }[] = [
   {
     q: "Is Desktop Buddy really free?",
-    a: "Yes. Free and open source, forever. The cat works for head pats, and the star runs on tea and compliments.",
+    a: "Yes. Free and open source, forever. The cat works for head pats, the star runs on tea and compliments, and the hamster accepts sunflower seeds.",
   },
   {
     q: "Which platforms does it run on?",
@@ -64,12 +77,12 @@ const FAQS: { q: string; a: string }[] = [
     a: "It keeps you company while you work, takes adorable drink breaks, pins gentle reminders to your screen, and showers you with hearts when you pet it.",
   },
   {
-    q: "Can I choose between the cat and the star?",
-    a: "Yes. Both come in the same download. Pick one when you first set up Desktop Buddy, and switch pets anytime from the menu — your names and reminders stay put.",
+    q: "Can I choose between the cat, star, and hamster?",
+    a: "Yes. All three come in the same download. Pick one when you first set up Desktop Buddy, and switch pets anytime from the menu — your names and reminders stay put.",
   },
   {
     q: "Can I give my buddy a name?",
-    a: "Of course. Once it moves in, you can name it — and name yourself too. Cats forget nothing, except maybe Tuesdays. The star remembers everything.",
+    a: "Of course. Once it moves in, you can name it — and name yourself too. Cats forget nothing, except maybe Tuesdays. The star remembers everything, and the hamster is already writing it down.",
   },
   {
     q: "How do I report a bug or ask something?",
@@ -262,7 +275,7 @@ export default function App() {
       {/* sticky sticker nav */}
       <nav className="topnav" aria-label="Site">
         <a className="nav-logo" href="#" aria-label="desktop-buddy">
-          <Pet pet={pet} mode="idle" size={pet === "star" ? 24 : 30} />
+          <Pet pet={pet} mode="idle" size={NAV_PET_SIZE[pet]} />
           <span>desktop-buddy</span>
         </a>
         <a href="#download">download</a>
@@ -270,7 +283,7 @@ export default function App() {
         <a href="#contact">contact</a>
       </nav>
 
-      {/* hero: the cat itself */}
+      {/* hero: the buddy itself */}
       <header id="download" className="hero">
         <Floaties />
         <div className="hero-inner">
@@ -282,7 +295,7 @@ export default function App() {
               <Pet
                 pet={pet}
                 mode={pet === "cat" ? "happy" : "idle"}
-                size={pet === "cat" ? 132 : 92}
+                size={HERO_PET_SIZE[pet]}
                 bob
               />
             </div>
@@ -302,7 +315,7 @@ export default function App() {
                     <Pet
                       pet={choice.id}
                       mode="idle"
-                      size={choice.id === "star" ? 18 : 28}
+                      size={CHIP_PET_SIZE[choice.id]}
                     />
                     <span>{choice.label}</span>
                   </button>
@@ -341,7 +354,7 @@ export default function App() {
             </a>
             {installer ? (
               <p className="cta-note">
-                desktop buddy {installer.tag ?? ""} · windows installer · cat + star · free and open source
+                desktop buddy {installer.tag ?? ""} · windows installer · cat + star + hamster · free and open source
               </p>
             ) : (
               <p className="cta-note">
@@ -376,7 +389,7 @@ export default function App() {
                   </li>
                   <li>
                     <strong>say hi to your buddy.</strong> the setup wizard asks
-                    who&rsquo;s moving in — cat or star — then their name and yours.
+                    who&rsquo;s moving in — cat, star, or hamster — then their name and yours.
                     with &ldquo;run desktop buddy&rdquo; left checked on the last
                     step, your buddy pops onto your screen the moment it finishes
                     installing.
@@ -424,7 +437,7 @@ export default function App() {
         </div>
         <div className="contact-card">
           <div className="peek" aria-hidden="true">
-            <Pet pet={pet} mode="idle" size={pet === "star" ? 46 : 62} bob />
+            <Pet pet={pet} mode="idle" size={CONTACT_PET_SIZE[pet]} bob />
           </div>
           <form className="query-form" onSubmit={sendQuery}>
             <label>
@@ -468,11 +481,11 @@ export default function App() {
           <PawIcon /> <HeartIcon /> <PawIcon />
         </p>
         <p className="footer-line">
-          made with love, cat naps, and a little stardust —{" "}
+          made with love, cat naps, a little stardust, and a pocket of seeds —{" "}
           <a href={REPO_URL}>desktop-buddy on GitHub</a>
         </p>
         <p className="footer-note">
-          no cats or stars were overworked in the making of this website.
+          no cats, stars, or hamsters were overworked in the making of this website.
         </p>
       </footer>
     </main>
