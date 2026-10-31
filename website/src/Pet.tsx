@@ -2,12 +2,16 @@ import cat from "./assets/cat.png";
 import catheart from "./assets/catheart.png";
 import catdrink from "./assets/catdrink.png";
 import catwork from "./assets/catwork.png";
+import dog from "./assets/dog.png";
+import dogheart from "./assets/dogheart.png";
+import dogdrink from "./assets/dogdrink.png";
+import dogwork from "./assets/dogwork.png";
 import star from "./assets/star.png";
 import starheart from "./assets/starheart.png";
 import stardrink from "./assets/stardrink.png";
 import starwork from "./assets/starwork.png";
 
-export type PetType = "cat" | "star";
+export type PetType = "cat" | "dog" | "star";
 export type PetMode = "idle" | "happy" | "drink" | "work";
 
 /**
@@ -28,6 +32,12 @@ const SHEETS: Record<PetType, Record<PetMode, Sheet>> = {
     happy: { src: catheart, frames: 2, step: "0.5s", win: { x: 6, y: 24, w: 36, h: 30 } },
     drink: { src: catdrink, frames: 2, step: "0.6s", win: { x: 6, y: 10, w: 36, h: 46 } },
     work: { src: catwork, frames: 3, step: "0.8s", win: { x: 6, y: 8, w: 36, h: 46 } },
+  },
+  dog: {
+    idle: { src: dog, frames: 3, step: "1.5s", win: { x: 14, y: 19, w: 40, h: 32 } },
+    happy: { src: dogheart, frames: 2, step: "0.9s", win: { x: 14, y: 14, w: 36, h: 36 } },
+    drink: { src: dogdrink, frames: 2, step: "1.2s", win: { x: 14, y: 7, w: 40, h: 52 } },
+    work: { src: dogwork, frames: 3, step: "1.5s", win: { x: 14, y: 12, w: 37, h: 38 } },
   },
   star: {
     idle: { src: star, frames: 3, step: "1.8s", win: { x: 15, y: 18, w: 36, h: 32 } },
