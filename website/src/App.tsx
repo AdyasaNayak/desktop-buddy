@@ -354,7 +354,7 @@ export default function App() {
             </a>
             {installer ? (
               <p className="cta-note">
-                desktop buddy {installer.tag ?? ""} · windows installer · cat + star + hamster · free and open source
+                desktop buddy {installer.tag ?? "latest"} · windows installer · free and open source
               </p>
             ) : (
               <p className="cta-note">
