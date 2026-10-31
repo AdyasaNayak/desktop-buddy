@@ -470,7 +470,7 @@ export default function App() {
               ))}
             </div>
             <small style={{ color: "#7a6650", fontSize: 11, lineHeight: 1.3 }}>
-              both buddies live in the same app. you can switch anytime from the menu.
+              all three buddies live in the same app. you can switch anytime from the menu.
             </small>
             <button type="submit">meet {PETS[petType].label} →</button>
           </form>
@@ -715,7 +715,7 @@ function PetPreview({ pet, size = 52 }: { pet: PetType; size?: number }) {
   );
 }
 
-const PET_CARD_PREVIEW: Record<PetType, number> = { cat: 52, star: 40 };
+const PET_CARD_PREVIEW: Record<PetType, number> = { cat: 52, star: 40, hamster: 46 };
 
 function PetChoice({
   pet,
