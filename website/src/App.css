@@ -1113,6 +1113,17 @@
     height: 8.6rem;
   }
 
+  .pet-switch__buttons {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pet-chip {
+    flex-direction: column;
+    gap: 0.2rem;
+    padding: 0.35rem 0.2rem;
+  }
+
   .perks {
     grid-template-columns: minmax(0, 1fr);
   }

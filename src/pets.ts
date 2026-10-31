@@ -10,8 +10,12 @@ import starIdle from "./assets/star.png";
 import starHeart from "./assets/starheart.png";
 import starDrink from "./assets/stardrink.png";
 import starWork from "./assets/starwork.png";
+import hamsterIdle from "./assets/hamster.png";
+import hamsterHeart from "./assets/hamsterheart.png";
+import hamsterDrink from "./assets/hamsterdrink.png";
+import hamsterWork from "./assets/hamsterwork.png";
 
-export type PetType = "cat" | "dog" | "star";
+export type PetType = "cat" | "dog" | "star" | "hamster";
 export type PetState = "idle" | "heart" | "drink" | "work";
 
 /** Every sheet is a horizontal strip of 64×64 frames. */
@@ -24,7 +28,7 @@ export interface PetDefinition {
   preview: { x: number; y: number; w: number; h: number };
 }
 
-export const PET_TYPES: PetType[] = ["cat", "dog", "star"];
+export const PET_TYPES: PetType[] = ["cat", "dog", "star", "hamster"];
 
 export const PETS: Record<PetType, PetDefinition> = {
   cat: {
@@ -67,9 +71,23 @@ export const PETS: Record<PetType, PetDefinition> = {
     frameMs: { idle: 600, heart: 700, drink: 800, work: 700 },
     preview: { x: 15, y: 18, w: 36, h: 32 },
   },
+  hamster: {
+    label: "hamster",
+    greeting: "squeak!",
+    sheets: {
+      idle: hamsterIdle,
+      heart: hamsterHeart,
+      drink: hamsterDrink,
+      work: hamsterWork,
+    },
+    frameCount: { idle: 3, heart: 2, drink: 2, work: 3 },
+    // Kept between 1 and 2 fps so the hamster stays calm and readable.
+    frameMs: { idle: 800, heart: 700, drink: 800, work: 700 },
+    preview: { x: 15, y: 19, w: 32, h: 32 },
+  },
 };
 
 /** Unknown or missing values fall back to the original cat. */
 export function toPetType(value: unknown): PetType {
-  return value === "dog" || value === "star" ? value : "cat";
+  return value === "dog" || value === "star" || value === "hamster" ? value : "cat";
 }

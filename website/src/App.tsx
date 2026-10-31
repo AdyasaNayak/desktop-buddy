@@ -45,18 +45,28 @@ const BUBBLES: Record<PetType, string[]> = {
     "your cursor looked lonely. i can fix that.",
     "i promise to remind you to drink water.",
   ],
+  hamster: [
+    "squeak! your desktop smells like snacks.",
+    "i can nibble, nap, and keep you company.",
+    "take me home. i will bring the sunflower seeds.",
+    "your cursor looked lonely. i can fix that.",
+    "i promise to remind you to drink water.",
+  ],
 };
 
 const PET_CHOICES: { id: PetType; label: string }[] = [
   { id: "cat", label: "Cat" },
   { id: "dog", label: "Dog" },
   { id: "star", label: "Star" },
+  { id: "hamster", label: "Hamster" },
 ];
 
+/** Each pet keeps its own scale so their real-world size stays consistent. */
 const PET_SIZES: Record<PetType, { hero: number; nav: number; chip: number; footer: number }> = {
   cat: { hero: 128, nav: 25, chip: 26, footer: 82 },
   dog: { hero: 100, nav: 20, chip: 18, footer: 64 },
   star: { hero: 90, nav: 20, chip: 18, footer: 62 },
+  hamster: { hero: 90, nav: 20, chip: 18, footer: 62 },
 };
 
 const PERKS = [
@@ -89,7 +99,7 @@ const PERKS = [
 const FAQS: { q: string; a: string }[] = [
   {
     q: "Is Desktop Buddy really free?",
-    a: "Yes. Free and open source, forever. The cat works for head pats, the dog works for belly rubs, and the star runs on tea and compliments.",
+    a: "Yes. Free and open source, forever. The cat works for head pats, the dog works for belly rubs, the star runs on tea and compliments, and the hamster accepts sunflower seeds.",
   },
   {
     q: "Which platforms does it run on?",
@@ -104,12 +114,12 @@ const FAQS: { q: string; a: string }[] = [
     a: "It keeps you company while you work, takes adorable drink breaks, pins gentle reminders to your screen, and showers you with hearts when you pet it.",
   },
   {
-    q: "Can I choose between the cat, dog, and star?",
-    a: "Yes. All three come in the same download. Pick one when you first set up Desktop Buddy, and switch pets anytime from the menu — your names and reminders stay put.",
+    q: "Can I choose between the cat, dog, star, and hamster?",
+    a: "Yes. All four come in the same download. Pick one when you first set up Desktop Buddy, and switch pets anytime from the menu — your names and reminders stay put.",
   },
   {
     q: "Can I give my buddy a name?",
-    a: "Of course. Once it moves in, you can name it — and name yourself too. Cats forget nothing, except maybe Tuesdays. The dog never forgets a snack. The star remembers everything.",
+    a: "Of course. Once it moves in, you can name it — and name yourself too. Cats forget nothing, except maybe Tuesdays. The dog never forgets a snack. The star remembers everything, and the hamster is already writing it down.",
   },
   {
     q: "How do I report a bug or ask something?",
@@ -365,7 +375,7 @@ export default function App() {
               </svg>
               Download for Windows
             </a>
-            <span className="cta-sticker">Cat + dog + star inside</span>
+            <span className="cta-sticker">Cat + dog + star + hamster inside</span>
           </div>
 
           {installer ? (
@@ -417,7 +427,7 @@ export default function App() {
                 </li>
                 <li>
                   <strong>Say hi to your buddy.</strong> The setup wizard asks
-                  who&rsquo;s moving in — cat, dog, or star — then their name and yours.
+                  who&rsquo;s moving in — cat, dog, star, or hamster — then their name and yours.
                   With &ldquo;run Desktop Buddy&rdquo; left checked on the last
                   step, your buddy pops onto your screen the moment it finishes
                   installing.
@@ -439,7 +449,7 @@ export default function App() {
             <div className="hero-pet-stage">
               <Pet
                 pet={pet}
-                mode={pet === "star" ? "idle" : "happy"}
+                mode={pet === "cat" || pet === "dog" ? "happy" : "idle"}
                 size={PET_SIZES[pet].hero}
                 bob
               />
@@ -522,14 +532,16 @@ export default function App() {
         <div className="footer-copy">
           <h2>See you in the corner.</h2>
           <p className="footer-line">
-            Made with love, cat naps, dog walks, and a little stardust.{" "}
+            Made with love, cat naps, dog walks, a little stardust, and a
+            pocket of seeds.{" "}
             <a href={REPO_URL} target="_blank" rel="noreferrer">
               Visit Desktop Buddy on GitHub
             </a>
             .
           </p>
           <p className="footer-note">
-            No buddies were overworked in the making of this website.
+            No cats, dogs, stars, or hamsters were overworked in the making of
+            this website.
           </p>
         </div>
 

@@ -459,7 +459,7 @@ export default function App() {
             }}
           >
             <strong>🐾 who's moving in?</strong>
-            <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
               {PET_TYPES.map((id) => (
                 <PetChoice
                   key={id}
@@ -470,7 +470,7 @@ export default function App() {
               ))}
             </div>
             <small style={{ color: "#7a6650", fontSize: 11, lineHeight: 1.3 }}>
-              all buddies live in the same app. you can switch anytime from the menu.
+              all four buddies live in the same app. you can switch anytime from the menu.
             </small>
             <button type="submit">meet {PETS[petType].label} →</button>
           </form>
@@ -671,7 +671,7 @@ export default function App() {
         <div style={dialogStyle}>
           <div style={{ ...panelStyle, width: 260 }}>
             <strong>who's moving in?</strong>
-            <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
               {PET_TYPES.map((id) => (
                 <PetChoice
                   key={id}
@@ -715,7 +715,7 @@ function PetPreview({ pet, size = 52 }: { pet: PetType; size?: number }) {
   );
 }
 
-const PET_CARD_PREVIEW: Record<PetType, number> = { cat: 52, dog: 40, star: 40 };
+const PET_CARD_PREVIEW: Record<PetType, number> = { cat: 52, dog: 40, star: 40, hamster: 46 };
 
 function PetChoice({
   pet,
