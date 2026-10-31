@@ -1,10 +1,11 @@
 import Dexie, { type Table } from "dexie";
+import type { PetType } from "./pets";
 
 export interface Profile {
   id: string;
   petName: string;
   yourName: string;
-  petType: string;
+  petType: PetType;
 }
 
 export interface WaterEntry {
