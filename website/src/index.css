@@ -1,18 +1,30 @@
 :root {
-  /* bright pastel sticker-book palette — iridescent blue */
-  --ink: #2c3e66;
-  --ink-soft: #4f639a;
-  --sky: #8fd9ff;
-  --sky-deep: #1667ad;
-  --sky-soft: #d9f2ff;
-  --lilac: #c9b6ff;
-  --lilac-soft: #ece6ff;
-  --sun: #ffd166;
-  --sun-soft: #fff3c4;
-  --paper: #fdfeff;
+  /* warm print-shop palette */
+  --paper: #f3e9d6;
+  --paper-bright: #fbf5e7;
+  --paper-deep: #e4d2b4;
+  --ink: #1a1510;
+  --ink-soft: #4b3d2f;
+  --orange: #f06a3a;
+  --pink: #f3a8be;
+  --mint: #8bcbb7;
+  --mint-soft: #d5ede4;
+  --sun: #f6c94c;
+  --sky: #8cb8e2;
+  --leaf: #6fa37a;
+  --leaf-deep: #3f7656;
 
+  --font-display: "Bricolage Grotesque", "Arial Black", sans-serif;
+  --font-body: "Instrument Sans", "Helvetica Neue", Arial, sans-serif;
   --font-pixel: "Silkscreen", monospace;
-  --font-body: "Nunito", sans-serif;
+
+  --frame: clamp(8px, 1.4vw, 18px);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
 
 html,
@@ -26,21 +38,30 @@ html {
 }
 
 body {
+  min-width: 20rem;
   font-family: var(--font-body);
-  font-size: 1rem;
+  font-size: 1.0625rem;
   line-height: 1.6;
   color: var(--ink);
-  background: #eefaff;
+  background-color: var(--paper-deep);
+  background-image: radial-gradient(
+    circle at 1px 1px,
+    rgba(26, 21, 16, 0.16) 1px,
+    transparent 0
+  );
+  background-size: 12px 12px;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 ::selection {
-  background: var(--sky-soft);
+  background: var(--sun);
   color: var(--ink);
 }
 
 :focus-visible {
-  outline: 3px solid var(--sky-deep);
-  outline-offset: 2px;
+  outline: 3px solid var(--ink);
+  outline-offset: 3px;
 }
 
 @media (prefers-reduced-motion: reduce) {

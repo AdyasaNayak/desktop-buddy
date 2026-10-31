@@ -1,17 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
-  <rect width="48" height="48" rx="10" fill="#4a7c3f"/>
-  <!-- ears -->
-  <path d="M12 10h6v8h-6z" fill="#f6e3b8"/>
-  <path d="M30 10h6v8h-6z" fill="#f6e3b8"/>
-  <path d="M13.5 13h3v3h-3z" fill="#e78fb3"/>
-  <path d="M31.5 13h3v3h-3z" fill="#e78fb3"/>
-  <!-- head -->
-  <rect x="10" y="16" width="28" height="20" rx="6" fill="#f6e3b8"/>
-  <!-- eyes -->
-  <rect x="16" y="24" width="4" height="4" fill="#3c3220"/>
-  <rect x="28" y="24" width="4" height="4" fill="#3c3220"/>
-  <!-- nose and whiskers -->
-  <rect x="22" y="29" width="4" height="3" fill="#e78fb3"/>
-  <rect x="12" y="30" width="6" height="2" fill="#d9c39c"/>
-  <rect x="30" y="30" width="6" height="2" fill="#d9c39c"/>
+  <rect x="2" y="2" width="44" height="44" rx="10" fill="#f3a8be" stroke="#1a1510" stroke-width="4"/>
+  <path d="M11 9h7v9h-7zM30 9h7v9h-7z" fill="#f6c94c" stroke="#1a1510" stroke-width="3"/>
+  <rect x="10" y="16" width="28" height="23" rx="5" fill="#f6c94c" stroke="#1a1510" stroke-width="3"/>
+  <rect x="15" y="24" width="4" height="5" fill="#1a1510"/>
+  <rect x="29" y="24" width="4" height="5" fill="#1a1510"/>
+  <rect x="22" y="30" width="4" height="3" fill="#f06a3a"/>
+  <path d="M12 17h24v5H12z" fill="#f3a8be" stroke="#1a1510" stroke-width="2"/>
 </svg>
