@@ -682,6 +682,40 @@
   .contact-card {
     padding: 1.5rem 1.25rem;
   }
+
+  /* four pet chips need to stay on one row on phones */
+  .pet-switch__buttons {
+    gap: 0.18rem;
+    padding: 0.18rem;
+  }
+
+  .pet-chip {
+    gap: 0.22rem;
+    padding: 0.12rem 0.42rem 0.12rem 0.18rem;
+    font-size: 0.56rem;
+  }
+}
+
+@media (max-width: 23rem) {
+  .pet-switch {
+    width: 100%;
+  }
+
+  .pet-switch__buttons {
+    box-sizing: border-box;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    border-radius: 1.1rem;
+  }
+
+  .pet-chip {
+    justify-content: center;
+  }
+
+  .pet-chip .pet-crop {
+    margin: 0;
+  }
 }
 
 /* ---------- reduced motion ---------- */

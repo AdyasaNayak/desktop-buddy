@@ -46,23 +46,31 @@ const BUBBLES: Record<PetType, string[]> = {
     "your cursor looked lonely. i can fix that.",
     "i promise to remind you to drink water.",
   ],
+  jellyfish: [
+    "bloop! your desktop looks deep and cozy.",
+    "i can drift, glow, and keep you company.",
+    "take me home. i will bring the bubbles.",
+    "your cursor looked lonely. i can fix that.",
+    "i promise to remind you to drink water.",
+  ],
 };
 
 const PET_CHOICES: { id: PetType; label: string }[] = [
   { id: "cat", label: "cat" },
   { id: "star", label: "star" },
   { id: "hamster", label: "hamster" },
+  { id: "jellyfish", label: "jellyfish" },
 ];
 
-const NAV_PET_SIZE: Record<PetType, number> = { cat: 30, star: 24, hamster: 24 };
-const HERO_PET_SIZE: Record<PetType, number> = { cat: 132, star: 92, hamster: 92 };
-const CHIP_PET_SIZE: Record<PetType, number> = { cat: 28, star: 18, hamster: 18 };
-const CONTACT_PET_SIZE: Record<PetType, number> = { cat: 62, star: 46, hamster: 46 };
+const NAV_PET_SIZE: Record<PetType, number> = { cat: 30, star: 24, hamster: 24, jellyfish: 24 };
+const HERO_PET_SIZE: Record<PetType, number> = { cat: 132, star: 92, hamster: 92, jellyfish: 92 };
+const CHIP_PET_SIZE: Record<PetType, number> = { cat: 28, star: 18, hamster: 18, jellyfish: 18 };
+const CONTACT_PET_SIZE: Record<PetType, number> = { cat: 62, star: 46, hamster: 46, jellyfish: 46 };
 
 const FAQS: { q: string; a: string }[] = [
   {
     q: "Is Desktop Buddy really free?",
-    a: "Yes. Free and open source, forever. The cat works for head pats, the star runs on tea and compliments, and the hamster accepts sunflower seeds.",
+    a: "Yes. Free and open source, forever. The cat works for head pats, the star runs on tea and compliments, the hamster accepts sunflower seeds, and the jellyfish floats for kind words.",
   },
   {
     q: "Which platforms does it run on?",
@@ -77,12 +85,12 @@ const FAQS: { q: string; a: string }[] = [
     a: "It keeps you company while you work, takes adorable drink breaks, pins gentle reminders to your screen, and showers you with hearts when you pet it.",
   },
   {
-    q: "Can I choose between the cat, star, and hamster?",
-    a: "Yes. All three come in the same download. Pick one when you first set up Desktop Buddy, and switch pets anytime from the menu — your names and reminders stay put.",
+    q: "Can I choose between the cat, star, hamster, and jellyfish?",
+    a: "Yes. They all come in the same download. Pick one when you first set up Desktop Buddy, and switch pets anytime from the menu — your names and reminders stay put.",
   },
   {
     q: "Can I give my buddy a name?",
-    a: "Of course. Once it moves in, you can name it — and name yourself too. Cats forget nothing, except maybe Tuesdays. The star remembers everything, and the hamster is already writing it down.",
+    a: "Of course. Once it moves in, you can name it — and name yourself too. Cats forget nothing, except maybe Tuesdays. The star remembers everything, the hamster is already writing it down, and the jellyfish keeps it all in a bubble.",
   },
   {
     q: "How do I report a bug or ask something?",
@@ -389,7 +397,7 @@ export default function App() {
                   </li>
                   <li>
                     <strong>say hi to your buddy.</strong> the setup wizard asks
-                    who&rsquo;s moving in — cat, star, or hamster — then their name and yours.
+                    who&rsquo;s moving in — cat, star, hamster, or jellyfish — then their name and yours.
                     with &ldquo;run desktop buddy&rdquo; left checked on the last
                     step, your buddy pops onto your screen the moment it finishes
                     installing.
@@ -481,11 +489,11 @@ export default function App() {
           <PawIcon /> <HeartIcon /> <PawIcon />
         </p>
         <p className="footer-line">
-          made with love, cat naps, a little stardust, and a pocket of seeds —{" "}
+          made with love, cat naps, a little stardust, a pocket of seeds, and a splash of seawater —{" "}
           <a href={REPO_URL}>desktop-buddy on GitHub</a>
         </p>
         <p className="footer-note">
-          no cats, stars, or hamsters were overworked in the making of this website.
+          no cats, stars, hamsters, or jellyfish were overworked in the making of this website.
         </p>
       </footer>
     </main>
