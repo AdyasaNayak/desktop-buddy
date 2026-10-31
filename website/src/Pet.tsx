@@ -40,10 +40,10 @@ const SHEETS: Record<PetType, Record<PetMode, Sheet>> = {
     work: { src: starwork, frames: 3, step: "2.1s", win: { x: 15, y: 0, w: 34, h: 50 } },
   },
   hamster: {
-    idle: { src: hamster, frames: 3, step: "1.8s", win: { x: 14, y: 18, w: 36, h: 34 } },
-    happy: { src: hamsterheart, frames: 2, step: "1.4s", win: { x: 14, y: 12, w: 38, h: 40 } },
-    drink: { src: hamsterdrink, frames: 2, step: "1.6s", win: { x: 12, y: 16, w: 42, h: 36 } },
-    work: { src: hamsterwork, frames: 3, step: "2.1s", win: { x: 13, y: 18, w: 38, h: 38 } },
+    idle: { src: hamster, frames: 3, step: "1.8s", win: { x: 7, y: 26, w: 30, h: 28 } },
+    happy: { src: hamsterheart, frames: 2, step: "1.4s", win: { x: 7, y: 18, w: 28, h: 36 } },
+    drink: { src: hamsterdrink, frames: 2, step: "1.6s", win: { x: 6, y: 8, w: 32, h: 48 } },
+    work: { src: hamsterwork, frames: 3, step: "2.1s", win: { x: 7, y: 8, w: 28, h: 46 } },
   },
 };
 

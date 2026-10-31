@@ -66,7 +66,7 @@ export const PETS: Record<PetType, PetDefinition> = {
     frameCount: { idle: 3, heart: 2, drink: 2, work: 3 },
     // Same calm pace as the star: between 1.25 and 1.67 fps.
     frameMs: { idle: 600, heart: 700, drink: 800, work: 700 },
-    preview: { x: 14, y: 18, w: 36, h: 34 },
+    preview: { x: 7, y: 26, w: 30, h: 28 },
   },
 };
 
