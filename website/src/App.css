@@ -1113,6 +1113,10 @@
     height: 8.6rem;
   }
 
+  .pet-switch__buttons {
+    flex-wrap: wrap;
+  }
+
   .pet-chip {
     flex-direction: column;
     gap: 0.2rem;

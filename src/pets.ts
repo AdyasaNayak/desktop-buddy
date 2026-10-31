@@ -10,8 +10,12 @@ import hamsterIdle from "./assets/hamster.png";
 import hamsterHeart from "./assets/hamsterheart.png";
 import hamsterDrink from "./assets/hamsterdrink.png";
 import hamsterWork from "./assets/hamsterwork.png";
+import jellyfishIdle from "./assets/jellyfish.png";
+import jellyfishHeart from "./assets/jellyfishheart.png";
+import jellyfishDrink from "./assets/jellyfishdrink.png";
+import jellyfishWork from "./assets/jellyfishwork.png";
 
-export type PetType = "cat" | "star" | "hamster";
+export type PetType = "cat" | "star" | "hamster" | "jellyfish";
 export type PetState = "idle" | "heart" | "drink" | "work";
 
 /** Every sheet is a horizontal strip of 64×64 frames. */
@@ -24,7 +28,7 @@ export interface PetDefinition {
   preview: { x: number; y: number; w: number; h: number };
 }
 
-export const PET_TYPES: PetType[] = ["cat", "star", "hamster"];
+export const PET_TYPES: PetType[] = ["cat", "star", "hamster", "jellyfish"];
 
 export const PETS: Record<PetType, PetDefinition> = {
   cat: {
@@ -68,9 +72,25 @@ export const PETS: Record<PetType, PetDefinition> = {
     frameMs: { idle: 800, heart: 700, drink: 800, work: 700 },
     preview: { x: 15, y: 19, w: 32, h: 32 },
   },
+  jellyfish: {
+    label: "jellyfish",
+    greeting: "bloop!",
+    sheets: {
+      idle: jellyfishIdle,
+      heart: jellyfishHeart,
+      drink: jellyfishDrink,
+      work: jellyfishWork,
+    },
+    frameCount: { idle: 3, heart: 2, drink: 2, work: 3 },
+    // A calm drift, like the star.
+    frameMs: { idle: 700, heart: 600, drink: 700, work: 650 },
+    preview: { x: 13, y: 20, w: 38, h: 32 },
+  },
 };
 
 /** Unknown or missing values fall back to the original cat. */
 export function toPetType(value: unknown): PetType {
-  return value === "star" || value === "hamster" ? value : "cat";
+  return value === "star" || value === "hamster" || value === "jellyfish"
+    ? value
+    : "cat";
 }

@@ -10,8 +10,12 @@ import hamster from "./assets/hamster.png";
 import hamsterheart from "./assets/hamsterheart.png";
 import hamsterdrink from "./assets/hamsterdrink.png";
 import hamsterwork from "./assets/hamsterwork.png";
+import jellyfish from "./assets/jellyfish.png";
+import jellyfishheart from "./assets/jellyfishheart.png";
+import jellyfishdrink from "./assets/jellyfishdrink.png";
+import jellyfishwork from "./assets/jellyfishwork.png";
 
-export type PetType = "cat" | "star" | "hamster";
+export type PetType = "cat" | "star" | "hamster" | "jellyfish";
 export type PetMode = "idle" | "happy" | "drink" | "work";
 
 /**
@@ -44,6 +48,12 @@ const SHEETS: Record<PetType, Record<PetMode, Sheet>> = {
     happy: { src: hamsterheart, frames: 2, step: "1.4s", win: { x: 15, y: 9, w: 32, h: 42 } },
     drink: { src: hamsterdrink, frames: 2, step: "1.6s", win: { x: 15, y: 1, w: 41, h: 50 } },
     work: { src: hamsterwork, frames: 3, step: "2.1s", win: { x: 15, y: 5, w: 32, h: 46 } },
+  },
+  jellyfish: {
+    idle: { src: jellyfish, frames: 3, step: "2.1s", win: { x: 13, y: 20, w: 38, h: 32 } },
+    happy: { src: jellyfishheart, frames: 2, step: "1.2s", win: { x: 12, y: 6, w: 40, h: 47 } },
+    drink: { src: jellyfishdrink, frames: 2, step: "1.4s", win: { x: 13, y: 4, w: 44, h: 55 } },
+    work: { src: jellyfishwork, frames: 3, step: "1.95s", win: { x: 15, y: 6, w: 33, h: 47 } },
   },
 };
 
