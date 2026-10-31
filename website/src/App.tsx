@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Pet } from "./Pet";
+import { Pet, type PetType } from "./Pet";
 import "./App.css";
 
 const DOWNLOAD_URL = "https://github.com/AdyasaNayak/desktop-buddy/releases";
@@ -24,38 +24,56 @@ function findInstaller(releases: GithubRelease[]) {
   return null;
 }
 
-const BUBBLES = [
-  "psst… i heard your desktop is very cozy.",
-  "i can sit, sip, and purr. professionally.",
-  "take me home and i will love you forever.",
-  "your cursor looked lonely. i can fix that.",
-  "i promise to remind you to drink water.",
+const BUBBLES: Record<PetType, string[]> = {
+  cat: [
+    "psst… i heard your desktop is very cozy.",
+    "i can sit, sip, and purr. professionally.",
+    "take me home and i will love you forever.",
+    "your cursor looked lonely. i can fix that.",
+    "i promise to remind you to drink water.",
+  ],
+  star: [
+    "twinkle! your desktop looked dark from up here.",
+    "i can glow, sip tea, and keep you company.",
+    "take me home. i will bring the stardust.",
+    "your cursor looked lonely. i can fix that.",
+    "i promise to remind you to drink water.",
+  ],
+};
+
+const PET_CHOICES: { id: PetType; label: string }[] = [
+  { id: "cat", label: "cat" },
+  { id: "star", label: "star" },
 ];
 
 const FAQS: { q: string; a: string }[] = [
   {
     q: "Is Desktop Buddy really free?",
-    a: "Yes. Free and open source, forever. The cat works for head pats and the occasional sip of water.",
+    a: "Yes. Free and open source, forever. The cat works for head pats, and the star runs on tea and compliments.",
   },
   {
     q: "Which platforms does it run on?",
-    a: "Windows right now. macOS and Linux versions are on the way — the cat is still learning to walk on other roofs.",
+    a: "Windows right now. macOS and Linux versions are on the way — the buddies are still learning to walk on other roofs.",
   },
   {
     q: "Will it slow my computer down?",
     a: "Nope. It is a tiny app that naps quietly in a corner of your screen. Your CPU will not even notice it moved in.",
   },
   {
-    q: "What can the little cat actually do?",
+    q: "What can my buddy actually do?",
     a: "It keeps you company while you work, takes adorable drink breaks, pins gentle reminders to your screen, and showers you with hearts when you pet it.",
   },
   {
-    q: "Can I give the cat a name?",
-    a: "Of course. Once it moves in, you can name it — and name yourself too. Cats forget nothing, except maybe Tuesdays.",
+    q: "Can I choose between the cat and the star?",
+    a: "Yes. Both come in the same download. Pick one when you first set up Desktop Buddy, and switch pets anytime from the menu — your names and reminders stay put.",
+  },
+  {
+    q: "Can I give my buddy a name?",
+    a: "Of course. Once it moves in, you can name it — and name yourself too. Cats forget nothing, except maybe Tuesdays. The star remembers everything.",
   },
   {
     q: "How do I report a bug or ask something?",
-    a: "Use the form below, or open an issue on GitHub. The cat reads every single one (with supervision).",
+    a: "Use the form below, or open an issue on GitHub. Your buddy reads every single one (with supervision).",
   },
 ];
 
@@ -196,6 +214,7 @@ function PawTrail() {
 }
 
 export default function App() {
+  const [pet, setPet] = useState<PetType>("cat");
   const [bubble, setBubble] = useState(0);
   const [sender, setSender] = useState("");
   const [message, setMessage] = useState("");
@@ -222,11 +241,11 @@ export default function App() {
   useEffect(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const timer = setInterval(
-      () => setBubble((b) => (b + 1) % BUBBLES.length),
+      () => setBubble((b) => (b + 1) % BUBBLES[pet].length),
       5000,
     );
     return () => clearInterval(timer);
-  }, []);
+  }, [pet]);
 
   const sendQuery = (e: React.FormEvent) => {
     e.preventDefault();
@@ -243,7 +262,7 @@ export default function App() {
       {/* sticky sticker nav */}
       <nav className="topnav" aria-label="Site">
         <a className="nav-logo" href="#" aria-label="desktop-buddy">
-          <Pet mode="idle" size={30} />
+          <Pet pet={pet} mode="idle" size={pet === "star" ? 24 : 30} />
           <span>desktop-buddy</span>
         </a>
         <a href="#download">download</a>
@@ -256,17 +275,52 @@ export default function App() {
         <Floaties />
         <div className="hero-inner">
           <div className="hero-pet">
-            <Speech key={bubble}>{BUBBLES[bubble]}</Speech>
-            <Pet mode="happy" size={132} bob />
+            <Speech key={`${pet}-${bubble}`}>
+              {BUBBLES[pet][bubble % BUBBLES[pet].length]}
+            </Speech>
+            <div className="hero-pet-stage">
+              <Pet
+                pet={pet}
+                mode={pet === "cat" ? "happy" : "idle"}
+                size={pet === "cat" ? 132 : 92}
+                bob
+              />
+            </div>
+            <div className="pet-switch" role="group" aria-label="Preview a buddy">
+              <div className="pet-switch__buttons">
+                {PET_CHOICES.map((choice) => (
+                  <button
+                    key={choice.id}
+                    type="button"
+                    className={`pet-chip${pet === choice.id ? " is-active" : ""}`}
+                    aria-pressed={pet === choice.id}
+                    onClick={() => {
+                      setPet(choice.id);
+                      setBubble(0);
+                    }}
+                  >
+                    <Pet
+                      pet={choice.id}
+                      mode="idle"
+                      size={choice.id === "star" ? 18 : 28}
+                    />
+                    <span>{choice.label}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="pet-switch__note">
+                same download. pick a buddy on first launch, switch anytime.
+              </p>
+            </div>
           </div>
           <h1>
-            a tiny pixel cat<br />
+            a tiny pixel {pet}<br />
             for your desktop
           </h1>
           <p className="hero-sub">
-            Desktop Buddy is a small, free, open-source cat who naps in a
-            corner of your screen, sips water, reminds you of things, and
-            loves you forever. No account. No cloud. Just a cat.
+            Desktop Buddy is a small, free, open-source companion who naps in
+            a corner of your screen, sips water, reminds you of things, and
+            loves you forever. No account. No cloud. Just a buddy.
           </p>
           <div className="hero-cta">
             <a
@@ -287,7 +341,7 @@ export default function App() {
             </a>
             {installer ? (
               <p className="cta-note">
-                desktop buddy {installer.tag ?? ""} · windows installer · free and open source
+                desktop buddy {installer.tag ?? ""} · windows installer · cat + star · free and open source
               </p>
             ) : (
               <p className="cta-note">
@@ -321,9 +375,11 @@ export default function App() {
                     — the app is new, not scary.
                   </li>
                   <li>
-                    <strong>say hi to your cat.</strong> the setup wizard walks you through
-                    everything, and with “run desktop buddy” left checked on the last step, the
-                    cat pops onto your screen the moment it finishes installing.
+                    <strong>say hi to your buddy.</strong> the setup wizard asks
+                    who&rsquo;s moving in — cat or star — then their name and yours.
+                    with &ldquo;run desktop buddy&rdquo; left checked on the last
+                    step, your buddy pops onto your screen the moment it finishes
+                    installing.
                   </li>
                 </ol>
               </div>
@@ -337,9 +393,9 @@ export default function App() {
       {/* FAQ */}
       <section id="faq" className="section" data-reveal>
         <div className="section-head">
-          <h2>curious? so is the cat</h2>
+          <h2>curious? so is your buddy</h2>
           <p className="section-sub">
-            the questions everyone asks before adopting a desktop cat.
+            the questions everyone asks before adopting a desktop buddy.
           </p>
         </div>
         <div className="faq-list">
@@ -360,15 +416,15 @@ export default function App() {
       {/* contact */}
       <section id="contact" className="section" data-reveal>
         <div className="section-head">
-          <h2>questions? the cat is listening</h2>
+          <h2>questions? your buddy is listening</h2>
           <p className="section-sub">
-            bugs, ideas, or just a hello — everything lands with the cat&rsquo;s
-            human.
+            bugs, ideas, or just a hello — everything lands with your
+            buddy&rsquo;s human.
           </p>
         </div>
         <div className="contact-card">
           <div className="peek" aria-hidden="true">
-            <Pet mode="idle" size={62} bob />
+            <Pet pet={pet} mode="idle" size={pet === "star" ? 46 : 62} bob />
           </div>
           <form className="query-form" onSubmit={sendQuery}>
             <label>
@@ -377,7 +433,7 @@ export default function App() {
                 type="text"
                 value={sender}
                 maxLength={40}
-                placeholder="what should the cat call you?"
+                placeholder="what should your buddy call you?"
                 onChange={(e) => setSender(e.target.value)}
               />
             </label>
@@ -388,7 +444,7 @@ export default function App() {
                 required
                 rows={5}
                 maxLength={2000}
-                placeholder="purr what is on your mind…"
+                placeholder="tell us what is on your mind…"
                 onChange={(e) => setMessage(e.target.value)}
               />
             </label>
@@ -412,11 +468,11 @@ export default function App() {
           <PawIcon /> <HeartIcon /> <PawIcon />
         </p>
         <p className="footer-line">
-          made with love and far too many cat naps —{" "}
+          made with love, cat naps, and a little stardust —{" "}
           <a href={REPO_URL}>desktop-buddy on GitHub</a>
         </p>
         <p className="footer-note">
-          no cats were overworked in the making of this website.
+          no cats or stars were overworked in the making of this website.
         </p>
       </footer>
     </main>

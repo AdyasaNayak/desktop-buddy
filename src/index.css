@@ -8,3 +8,22 @@ body,
   overflow: hidden;
   background: transparent;
 }
+
+.pet-preview {
+  background-repeat: no-repeat;
+  background-position: 0 0;
+  image-rendering: pixelated;
+  animation: pet-preview-frames var(--pet-preview-duration) steps(var(--pet-preview-frames)) infinite;
+}
+
+@keyframes pet-preview-frames {
+  to {
+    background-position: calc(var(--pet-preview-frame-width) * var(--pet-preview-frames) * -1) 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pet-preview {
+    animation: none;
+  }
+}

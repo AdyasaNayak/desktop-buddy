@@ -1,9 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { db, type Profile, type Reminder } from "./db";
-import idleSheet from "./assets/cat.png";
-import heartSheet from "./assets/catheart.png";
-import drinkSheet from "./assets/catdrink.png";
-import workSheet from "./assets/catwork.png";
+import { PETS, PET_TYPES, toPetType, type PetState, type PetType } from "./pets";
 
 declare global {
   interface Window {
@@ -21,22 +18,7 @@ declare global {
   }
 }
 
-type PetState = "idle" | "heart" | "drink" | "work";
-
-const SIZE = 160; // draw size - bigger = larger cat
-
-const FRAME_COUNT: Record<PetState, number> = {
-  idle: 3,
-  heart: 2,
-  drink: 2,
-  work: 3,
-};
-const FRAME_MS: Record<PetState, number> = {
-  idle: 500,
-  heart: 400,
-  drink: 600,
-  work: 300,
-};
+const SIZE = 160; // draw size - bigger = larger buddy
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -60,9 +42,16 @@ export default function App() {
   const [startWithWindows, setStartWithWindows] = useState(true);
   const [renaming, setRenaming] = useState(false);
   const [welcome, setWelcome] = useState<string | null>(null);
+  const [petType, setPetType] = useState<PetType>("cat");
+  const [choosingPet, setChoosingPet] = useState(true);
+  const [changingPet, setChangingPet] = useState(false);
+  const positionRef = useRef<{ x: number; y: number } | null>(null);
+  const welcomeTimer = useRef<number | null>(null);
   const showSetup = profile === null;
   // true once a profile exists (or is created), no form is shown, and the pet view can mount
   const petReady = profile !== undefined && !showSetup && !renaming;
+  const activePet = profile ? toPetType(profile.petType) : petType;
+  const shownPet = renaming && profile ? toPetType(profile.petType) : petType;
 
   useEffect(() => {
     let active = true;
@@ -70,7 +59,9 @@ export default function App() {
       try {
         await db.open();
         const saved = await db.profiles.get("me");
-        if (active) setProfile(saved ?? null);
+        if (active) {
+          setProfile(saved ? { ...saved, petType: toPetType(saved.petType) } : null);
+        }
       } catch {
         if (active) setProfile(null);
       }
@@ -78,6 +69,12 @@ export default function App() {
     void loadProfile();
     return () => {
       active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (welcomeTimer.current !== null) window.clearTimeout(welcomeTimer.current);
     };
   }, []);
 
@@ -131,6 +128,7 @@ export default function App() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d")!;
+    const pet = PETS[activePet];
 
     const images: Record<PetState, HTMLImageElement> = {
       idle: new Image(),
@@ -138,10 +136,10 @@ export default function App() {
       drink: new Image(),
       work: new Image(),
     };
-    images.idle.src = idleSheet;
-    images.heart.src = heartSheet;
-    images.drink.src = drinkSheet;
-    images.work.src = workSheet;
+    images.idle.src = pet.sheets.idle;
+    images.heart.src = pet.sheets.heart;
+    images.drink.src = pet.sheets.drink;
+    images.work.src = pet.sheets.work;
     // a sheet finishing after an earlier empty paint must invalidate the cache
     images.heart.onload = () => {
       lastPaintKey = "";
@@ -154,8 +152,11 @@ export default function App() {
     };
 
     let groundY = window.innerHeight - SIZE - 10;
-    let x = window.innerWidth / 2 - SIZE / 2;
-    let y = groundY;
+    const savedPosition = positionRef.current;
+    let x = savedPosition
+      ? Math.max(0, Math.min(savedPosition.x, window.innerWidth - SIZE))
+      : window.innerWidth / 2 - SIZE / 2;
+    let y = savedPosition ? Math.min(savedPosition.y, groundY) : groundY;
     let targetX = x;
     let isWalking = false;
     let isDragging = false;
@@ -287,8 +288,8 @@ export default function App() {
         frame = 0;
         lastState = state;
       }
-      if (time - lastAnimTime > FRAME_MS[state]) {
-        frame = (frame + 1) % FRAME_COUNT[state];
+      if (time - lastAnimTime > pet.frameMs[state]) {
+        frame = (frame + 1) % pet.frameCount[state];
         lastAnimTime = time;
       }
 
@@ -320,8 +321,9 @@ export default function App() {
         }
       }
 
-      // safety clamp: never let cat go below screen
+      // safety clamp: never let the buddy go below screen
       y = Math.max(0, Math.min(y, groundY));
+      positionRef.current = { x, y };
 
       // repaint only when pixels can actually change - constant repainting
       // of a transparent window keeps the compositor busy and feels laggy
@@ -354,8 +356,9 @@ export default function App() {
       if (petTimeout) clearTimeout(petTimeout);
       cancelAnimationFrame(raf);
     };
-    // re-run when the pet view mounts (profile load / first-run setup handoff)
-  }, [petReady]);
+    // re-run when the pet view mounts or the chosen buddy changes;
+    // positionRef keeps a switch from teleporting the pet
+  }, [petReady, activePet]);
 
   const addReminder = async () => {
     const remindAt = new Date(reminderAt).getTime();
@@ -394,13 +397,24 @@ export default function App() {
     setReminders((current) => current.filter((reminder) => reminder.id !== id));
   };
 
+  const announce = (pet: PetType, name: string, humanName: string) => {
+    const greeting = PETS[pet].greeting;
+    setWelcome(
+      humanName
+        ? `${greeting} i'm ${name}. hi, ${humanName}!`
+        : `${greeting} i'm ${name}. i live here now.`,
+    );
+    if (welcomeTimer.current !== null) window.clearTimeout(welcomeTimer.current);
+    welcomeTimer.current = window.setTimeout(() => setWelcome(null), 6000);
+  };
+
   const finishSetup = async (event: React.FormEvent) => {
     event.preventDefault();
     const saved: Profile = {
       id: "me",
       petName: petName.trim() || "Mochi",
       yourName: yourName.trim(),
-      petType: "cat",
+      petType: renaming && profile ? toPetType(profile.petType) : petType,
     };
     try {
       await db.profiles.put(saved);
@@ -414,21 +428,74 @@ export default function App() {
     }
     setProfile(saved);
     setRenaming(false);
-    setWelcome(
-      saved.yourName
-        ? `meow! i'm ${saved.petName}. hi, ${saved.yourName}!`
-        : `meow! i'm ${saved.petName}. i live here now.`,
-    );
-    window.setTimeout(() => setWelcome(null), 6000);
+    announce(saved.petType, saved.petName, saved.yourName);
+  };
+
+  const changePet = async (nextPet: PetType) => {
+    if (!profile) return;
+    const next: Profile = { ...profile, petType: nextPet };
+    try {
+      await db.profiles.put(next);
+    } catch (error) {
+      console.error("Could not save pet choice", error);
+    }
+    setProfile(next);
+    setChangingPet(false);
+    setMenuOpen(false);
+    announce(nextPet, next.petName, next.yourName);
   };
 
   if (profile === undefined) return null;
 
   if (profile === null || renaming) {
+    if (!renaming && choosingPet) {
+      return (
+        <div style={centerStyle}>
+          <form
+            style={onboardingStyle}
+            onSubmit={(event) => {
+              event.preventDefault();
+              setChoosingPet(false);
+            }}
+          >
+            <strong>🐾 who's moving in?</strong>
+            <div style={{ display: "flex", gap: 8 }}>
+              {PET_TYPES.map((id) => (
+                <PetChoice
+                  key={id}
+                  pet={id}
+                  selected={petType === id}
+                  onClick={() => setPetType(id)}
+                />
+              ))}
+            </div>
+            <small style={{ color: "#7a6650", fontSize: 11, lineHeight: 1.3 }}>
+              both buddies live in the same app. you can switch anytime from the menu.
+            </small>
+            <button type="submit">meet {PETS[petType].label} →</button>
+          </form>
+        </div>
+      );
+    }
+
     return (
-      <div style={{ width: "100vw", height: "100vh", display: "grid", placeItems: "center" }}>
+      <div style={centerStyle}>
         <form style={onboardingStyle} onSubmit={(event) => void finishSetup(event)}>
-          <strong>{renaming ? "✏️ let's tweak my name" : "🐾 hi! i'm your new buddy"}</strong>
+          <strong style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <PetPreview pet={shownPet} size={34} />
+            <span style={{ flex: 1 }}>
+              {renaming ? "✏️ let's tweak my name" : "hi! i'm your new buddy"}
+            </span>
+            {!renaming && (
+              <button
+                type="button"
+                onClick={() => setChoosingPet(true)}
+                style={changePetLinkStyle}
+              >
+                change
+              </button>
+            )}
+          </strong>
           <label>
             name me
             <input
@@ -517,9 +584,14 @@ export default function App() {
             <button onClick={() => {
               setPetName(profile.petName);
               setYourName(profile.yourName);
+              setPetType(toPetType(profile.petType));
               setRenaming(true);
               setMenuOpen(false);
             }}>✏️ Rename</button>
+            <button onClick={() => {
+              setChangingPet(true);
+              setMenuOpen(false);
+            }}>🐾 Change pet</button>
             <button onClick={() => window.desktopBuddy?.exitApp()}>✕ Exit</button>
             <button onClick={() => setMenuOpen(false)}>× Close</button>
           </div>
@@ -594,19 +666,134 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {changingPet && (
+        <div style={dialogStyle}>
+          <div style={{ ...panelStyle, width: 260 }}>
+            <strong>who's moving in?</strong>
+            <div style={{ display: "flex", gap: 8 }}>
+              {PET_TYPES.map((id) => (
+                <PetChoice
+                  key={id}
+                  pet={id}
+                  selected={activePet === id}
+                  onClick={() => void changePet(id)}
+                />
+              ))}
+            </div>
+            <button type="button" onClick={() => setChangingPet(false)}>cancel</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
+function PetPreview({ pet, size = 52 }: { pet: PetType; size?: number }) {
+  const definition = PETS[pet];
+  const frames = definition.frameCount.idle;
+  const win = definition.preview;
+  const scale = size / win.h;
+  return (
+    <div style={{ width: win.w * scale, height: size, overflow: "hidden", flex: "none" }}>
+      <div
+        className="pet-preview"
+        aria-hidden="true"
+        style={{
+          width: 64 * scale,
+          height: 64 * scale,
+          marginLeft: -win.x * scale,
+          marginTop: -win.y * scale,
+          backgroundImage: `url(${definition.sheets.idle})`,
+          backgroundSize: `${64 * scale * frames}px ${64 * scale}px`,
+          ["--pet-preview-frame-width" as string]: `${64 * scale}px`,
+          ["--pet-preview-frames" as string]: frames,
+          ["--pet-preview-duration" as string]: `${(frames * definition.frameMs.idle) / 1000}s`,
+        }}
+      />
+    </div>
+  );
+}
+
+const PET_CARD_PREVIEW: Record<PetType, number> = { cat: 52, star: 40 };
+
+function PetChoice({
+  pet,
+  selected,
+  onClick,
+}: {
+  pet: PetType;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={selected}
+      onClick={onClick}
+      style={{ ...petChoiceStyle, ...(selected ? petChoiceSelectedStyle : {}) }}
+    >
+      <div style={petChoicePreviewStyle}>
+        <PetPreview pet={pet} size={PET_CARD_PREVIEW[pet]} />
+      </div>
+      <span>{PETS[pet].label}</span>
+    </button>
+  );
+}
+
+const centerStyle = {
+  width: "100vw",
+  height: "100vh",
+  display: "grid",
+  placeItems: "center",
+};
 const onboardingStyle = {
   display: "grid",
   gap: 8,
   width: 280,
+  maxHeight: "100vh",
+  overflowY: "auto" as const,
+  boxSizing: "border-box" as const,
   padding: 16,
   borderRadius: 14,
   background: "rgba(255, 248, 231, 0.98)",
   boxShadow: "0 5px 20px rgba(50, 35, 20, 0.24)",
   fontSize: 13,
+};
+const changePetLinkStyle = {
+  border: "none",
+  background: "none",
+  padding: 0,
+  color: "#7a5a3a",
+  fontSize: 11,
+  fontWeight: 600,
+  fontFamily: "inherit",
+  textDecoration: "underline",
+  cursor: "pointer",
+};
+const petChoicePreviewStyle = {
+  width: "100%",
+  height: 52,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+};
+const petChoiceStyle = {
+  display: "grid",
+  justifyItems: "center",
+  flex: 1,
+  padding: "8px 4px",
+  borderRadius: 12,
+  border: "2px solid transparent",
+  background: "rgba(255, 255, 255, 0.5)",
+  color: "#4a3b2a",
+  fontFamily: "inherit",
+  fontSize: 12,
+  cursor: "pointer",
+};
+const petChoiceSelectedStyle = {
+  borderColor: "#b9895c",
+  background: "#fff1d0",
 };
 const welcomeStyle = {
   padding: "8px 12px",
