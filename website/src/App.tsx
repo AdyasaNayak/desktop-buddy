@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Pet, type PetType } from "./Pet";
+import { Pet, type PetMode, type PetType } from "./Pet";
 import "./App.css";
 
 const DOWNLOAD_URL = "https://github.com/AdyasaNayak/desktop-buddy/releases";
@@ -45,19 +45,33 @@ const BUBBLES: Record<PetType, string[]> = {
     "your cursor looked lonely. i can fix that.",
     "i promise to remind you to drink water.",
   ],
+  jellyfish: [
+    "bloop! your desktop looked like a cozy tide pool.",
+    "i can glow, drift, and sip tea with you.",
+    "take me home. i will bring the deep-sea calm.",
+    "your cursor looked lonely. i can fix that.",
+    "i promise to remind you to drink water.",
+  ],
 };
 
 const PET_CHOICES: { id: PetType; label: string }[] = [
   { id: "cat", label: "Cat" },
   { id: "star", label: "Star" },
   { id: "hamster", label: "Hamster" },
+  { id: "jellyfish", label: "Jellyfish" },
 ];
 
 /** Each pet keeps its own scale so their real-world size stays consistent. */
-const NAV_SIZE: Record<PetType, number> = { cat: 25, star: 20, hamster: 20 };
-const HERO_SIZE: Record<PetType, number> = { cat: 128, star: 90, hamster: 90 };
-const CHIP_SIZE: Record<PetType, number> = { cat: 26, star: 18, hamster: 18 };
-const FOOTER_SIZE: Record<PetType, number> = { cat: 82, star: 62, hamster: 62 };
+const NAV_SIZE: Record<PetType, number> = { cat: 25, star: 20, hamster: 20, jellyfish: 22 };
+const HERO_SIZE: Record<PetType, number> = { cat: 128, star: 90, hamster: 90, jellyfish: 100 };
+const CHIP_SIZE: Record<PetType, number> = { cat: 26, star: 18, hamster: 18, jellyfish: 22 };
+const FOOTER_SIZE: Record<PetType, number> = { cat: 82, star: 62, hamster: 62, jellyfish: 70 };
+const HERO_MODE: Record<PetType, PetMode> = {
+  cat: "happy",
+  star: "idle",
+  hamster: "idle",
+  jellyfish: "happy",
+};
 
 const PERKS = [
   {
@@ -89,7 +103,7 @@ const PERKS = [
 const FAQS: { q: string; a: string }[] = [
   {
     q: "Is Desktop Buddy really free?",
-    a: "Yes. Free and open source, forever. The cat works for head pats, the star runs on tea and compliments, and the hamster accepts sunflower seeds.",
+    a: "Yes. Free and open source, forever. The cat works for head pats, the star runs on tea and compliments, the hamster accepts sunflower seeds, and the jellyfish floats by on good vibes.",
   },
   {
     q: "Which platforms does it run on?",
@@ -104,12 +118,12 @@ const FAQS: { q: string; a: string }[] = [
     a: "It keeps you company while you work, takes adorable drink breaks, pins gentle reminders to your screen, and showers you with hearts when you pet it.",
   },
   {
-    q: "Can I choose between the cat, star, and hamster?",
-    a: "Yes. All three come in the same download. Pick one when you first set up Desktop Buddy, and switch pets anytime from the menu — your names and reminders stay put.",
+    q: "Can I choose between the cat, star, hamster, and jellyfish?",
+    a: "Yes. All four come in the same download. Pick one when you first set up Desktop Buddy, and switch pets anytime from the menu — your names and reminders stay put.",
   },
   {
     q: "Can I give my buddy a name?",
-    a: "Of course. Once it moves in, you can name it — and name yourself too. Cats forget nothing, except maybe Tuesdays. The star remembers everything, and the hamster is already writing it down.",
+    a: "Of course. Once it moves in, you can name it — and name yourself too. Cats forget nothing, except maybe Tuesdays. The star remembers everything, the hamster is already writing it down, and the jellyfish remembers in waves.",
   },
   {
     q: "How do I report a bug or ask something?",
@@ -365,7 +379,7 @@ export default function App() {
               </svg>
               Download for Windows
             </a>
-            <span className="cta-sticker">Cat + star + hamster inside</span>
+            <span className="cta-sticker">Cat + star + hamster + jellyfish inside</span>
           </div>
 
           {installer ? (
@@ -417,7 +431,7 @@ export default function App() {
                 </li>
                 <li>
                   <strong>Say hi to your buddy.</strong> The setup wizard asks
-                  who&rsquo;s moving in — cat, star, or hamster — then their name and yours.
+                  who&rsquo;s moving in — cat, star, hamster, or jellyfish — then their name and yours.
                   With &ldquo;run Desktop Buddy&rdquo; left checked on the last
                   step, your buddy pops onto your screen the moment it finishes
                   installing.
@@ -439,7 +453,7 @@ export default function App() {
             <div className="hero-pet-stage">
               <Pet
                 pet={pet}
-                mode={pet === "cat" ? "happy" : "idle"}
+                mode={HERO_MODE[pet]}
                 size={HERO_SIZE[pet]}
                 bob
               />
@@ -522,16 +536,16 @@ export default function App() {
         <div className="footer-copy">
           <h2>See you in the corner.</h2>
           <p className="footer-line">
-            Made with love, cat naps, a little stardust, and a pocket of
-            seeds.{" "}
+            Made with love, cat naps, a little stardust, a pocket of seeds, and
+            a little sea breeze.{" "}
             <a href={REPO_URL} target="_blank" rel="noreferrer">
               Visit Desktop Buddy on GitHub
             </a>
             .
           </p>
           <p className="footer-note">
-            No cats, stars, or hamsters were overworked in the making of this
-            website.
+            No cats, stars, hamsters, or jellyfish were overworked in the
+            making of this website.
           </p>
         </div>
 
