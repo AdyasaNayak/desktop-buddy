@@ -22,10 +22,30 @@ export interface Reminder {
   notified: boolean;
 }
 
+/** The user's chosen schedule for water nudges. */
+export interface WaterPlan {
+  id: string;
+  amountMl: number;
+  intervalMinutes: number;
+  nextReminderAt: number;
+  enabled: boolean;
+}
+
+export interface WorkSession {
+  id?: number;
+  task: string;
+  startedAt: number;
+  endedAt?: number;
+  durationMs: number;
+  heartbeatAt: number;
+}
+
 class BuddyDB extends Dexie {
   profiles!: Table<Profile, string>;
   water!: Table<WaterEntry, number>;
   reminders!: Table<Reminder, number>;
+  waterPlans!: Table<WaterPlan, string>;
+  workSessions!: Table<WorkSession, number>;
 
   constructor() {
     super("buddyDB");
@@ -37,6 +57,13 @@ class BuddyDB extends Dexie {
       profiles: "id",
       water: "++id, date",
       reminders: "++id, remindAt",
+    });
+    this.version(3).stores({
+      profiles: "id",
+      water: "++id, date",
+      reminders: "++id, remindAt",
+      waterPlans: "id",
+      workSessions: "++id, startedAt",
     });
   }
 }

@@ -3,6 +3,11 @@ import "./App.css";
 import { db, type Profile, type Reminder } from "./db";
 import { Onboarding, type OnboardingResult } from "./Onboarding";
 import { PetPreview } from "./PetPreview";
+import { WaterPanel } from "./WaterPanel";
+import { WorkPanel } from "./WorkPanel";
+import { formatClock, formatInterval } from "./time";
+import { useWaterReminder } from "./useWaterReminder";
+import { useWorkLog } from "./useWorkLog";
 import {
   PETS,
   PET_PREVIEW_SIZE,
@@ -34,8 +39,9 @@ const SIZE = 160; // draw size - bigger = larger buddy
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const controlRef = useRef({ drinkLeft: 0, work: false });
-  const [workOn, setWorkOn] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [waterOpen, setWaterOpen] = useState(false);
+  const [workOpen, setWorkOpen] = useState(false);
   const [reminderOpen, setReminderOpen] = useState(false);
   const [sleepOpen, setSleepOpen] = useState(false);
   const [reminders, setReminders] = useState<Reminder[]>([]);
@@ -51,12 +57,20 @@ export default function App() {
   const [renaming, setRenaming] = useState(false);
   const [welcome, setWelcome] = useState<string | null>(null);
   const [changingPet, setChangingPet] = useState(false);
+  const [waterBusy, setWaterBusy] = useState(false);
+  const waterActionRef = useRef(false);
   const positionRef = useRef<{ x: number; y: number } | null>(null);
   const welcomeTimer = useRef<number | null>(null);
   const showSetup = profile === null;
   // true once a profile exists (or is created), no form is shown, and the pet view can mount
   const petReady = profile !== undefined && !showSetup && !renaming;
   const activePet = profile ? toPetType(profile.petType) : "cat";
+  const water = useWaterReminder(
+    profile?.petName ?? "your buddy",
+    profile?.yourName ?? "",
+    petReady,
+  );
+  const work = useWorkLog();
   const windowMode =
     profile === undefined ? null : showSetup || renaming ? "setup" : "pet";
 
@@ -92,6 +106,16 @@ export default function App() {
         window.clearTimeout(welcomeTimer.current);
     };
   }, []);
+
+  useEffect(() => {
+    controlRef.current.work = work.active !== null;
+  }, [work.active]);
+
+  // a water nudge takes over the bubble and plays the drinking animation
+  useEffect(() => {
+    if (!water.prompt) return;
+    controlRef.current.drinkLeft = 2600;
+  }, [water.prompt]);
 
   useEffect(() => {
     let active = true;
@@ -443,16 +467,72 @@ export default function App() {
     setReminders((current) => current.filter((reminder) => reminder.id !== id));
   };
 
+  const showBubble = (message: string, ms = 6000) => {
+    setWelcome(message);
+    if (welcomeTimer.current !== null)
+      window.clearTimeout(welcomeTimer.current);
+    welcomeTimer.current = window.setTimeout(() => setWelcome(null), ms);
+  };
+
   const announce = (pet: PetType, name: string, humanName: string) => {
     const greeting = PETS[pet].greeting;
-    setWelcome(
+    showBubble(
       humanName
         ? `${greeting} i'm ${name}. hi, ${humanName}! click me for my menu.`
         : `${greeting} i'm ${name}. i live here now. click me for my menu.`,
     );
-    if (welcomeTimer.current !== null)
-      window.clearTimeout(welcomeTimer.current);
-    welcomeTimer.current = window.setTimeout(() => setWelcome(null), 6000);
+  };
+
+  const saveWaterPlan = async (amountMl: number, intervalMinutes: number) => {
+    await water.savePlan(amountMl, intervalMinutes);
+    controlRef.current.drinkLeft = 1600;
+    showBubble(
+      `water breaks on! ${amountMl} ml every ${formatInterval(intervalMinutes)}. i'll keep you topped up.`,
+    );
+  };
+
+  const stopWaterPlan = async () => {
+    await water.stop();
+    showBubble("water reminders are off. drink whenever you feel like it.");
+  };
+
+  const runWaterAction = async (action: () => Promise<void>) => {
+    // the ref blocks a double-click before React can re-render the disabled state
+    if (waterActionRef.current) return;
+    waterActionRef.current = true;
+    setWaterBusy(true);
+    try {
+      await action();
+    } catch (error) {
+      console.error("Could not update water reminder", error);
+      showBubble("could not update your water break. one more try?");
+    } finally {
+      waterActionRef.current = false;
+      setWaterBusy(false);
+    }
+  };
+
+  const drankFromPrompt = () =>
+    runWaterAction(async () => {
+      const total = await water.drank();
+      showBubble(`logged! that's ${total} ml today. proud of you.`);
+    });
+
+  const snoozeWater = () =>
+    runWaterAction(async () => {
+      await water.snooze();
+      showBubble("okay, i'll ask again in 10 minutes.");
+    });
+
+  const turnOffWater = () =>
+    runWaterAction(async () => {
+      await water.turnOff();
+      showBubble("water nudges are off for now.");
+    });
+
+  const startWork = async (task: string) => {
+    await work.start(task);
+    showBubble(`focus mode on: ${task.trim()}. i'll keep time.`, 5000);
   };
 
   const saveProfile = async (result: OnboardingResult) => {
@@ -526,9 +606,68 @@ export default function App() {
     <div style={{ position: "relative", width: "100vw", height: "100vh" }}>
       <canvas ref={canvasRef} style={{ display: "block" }} />
 
-      {welcome && (
-        <div style={{ position: "absolute", top: 8, left: 8, zIndex: 5 }}>
-          <div className="buddy-bubble">{welcome}</div>
+      {water.prompt ? (
+        <div
+          style={{
+            position: "absolute",
+            // keep a scheduled nudge below an open menu instead of covering it
+            top: menuOpen ? 106 : 8,
+            left: 8,
+            zIndex: 15,
+            maxWidth: "calc(100% - 16px)",
+          }}
+        >
+          <div className="buddy-bubble buddy-bubble--water">
+            <span className="buddy-bubble__tag">water break</span>
+            <p className="buddy-bubble__text">{water.prompt.message}</p>
+            <p className="buddy-bubble__meta">
+              {water.prompt.amountMl} ml now · {water.prompt.totalMl} ml today
+            </p>
+            <div className="buddy-bubble__actions">
+              <button
+                type="button"
+                className="buddy-mini-btn"
+                disabled={waterBusy}
+                onClick={() => void drankFromPrompt()}
+              >
+                drank it
+              </button>
+              <button
+                type="button"
+                className="buddy-mini-btn"
+                disabled={waterBusy}
+                onClick={() => void snoozeWater()}
+              >
+                10 min
+              </button>
+              <button
+                type="button"
+                className="buddy-mini-btn buddy-mini-btn--quiet"
+                disabled={waterBusy}
+                onClick={() => void turnOffWater()}
+              >
+                stop nudges
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        welcome && (
+          <div style={{ position: "absolute", top: 8, left: 8, zIndex: 5 }}>
+            <div className="buddy-bubble">{welcome}</div>
+          </div>
+        )
+      )}
+
+      {work.active && (
+        <div
+          className="buddy-timer"
+          title={`working on ${work.active.task}`}
+        >
+          <span className="buddy-timer__clock">
+            {formatClock(work.elapsedMs)}
+          </span>
+          <span className="buddy-timer__task">{work.active.task}</span>
         </div>
       )}
 
@@ -541,7 +680,7 @@ export default function App() {
               type="button"
               className="buddy-menu__button"
               onClick={() => {
-                controlRef.current.drinkLeft = 2000;
+                setWaterOpen(true);
                 setMenuOpen(false);
               }}
             >
@@ -551,12 +690,11 @@ export default function App() {
               type="button"
               className="buddy-menu__button"
               onClick={() => {
-                controlRef.current.work = !controlRef.current.work;
-                setWorkOn((prev) => !prev);
+                setWorkOpen(true);
                 setMenuOpen(false);
               }}
             >
-              {workOn ? "Stop work" : "Work mode"}
+              {work.active ? "Working…" : "Work mode"}
             </button>
             <button
               type="button"
@@ -734,6 +872,31 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {waterOpen && (
+        <WaterPanel
+          key={water.plan ? "plan-loaded" : "plan-empty"}
+          plan={water.plan}
+          todayMl={water.todayMl}
+          onSave={saveWaterPlan}
+          onStop={stopWaterPlan}
+          onDrink={water.drank}
+          onPreview={water.preview}
+          onClose={() => setWaterOpen(false)}
+        />
+      )}
+
+      {workOpen && (
+        <WorkPanel
+          active={work.active}
+          elapsedMs={work.elapsedMs}
+          totals={work.totals}
+          recent={work.recent}
+          onStart={startWork}
+          onStop={work.stop}
+          onClose={() => setWorkOpen(false)}
+        />
       )}
 
       {changingPet && (
