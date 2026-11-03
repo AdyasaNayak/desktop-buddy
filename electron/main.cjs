@@ -1,10 +1,22 @@
-const { app, BrowserWindow, Notification, ipcMain, screen } = require("electron");
+const {
+  app,
+  BrowserWindow,
+  Menu,
+  Notification,
+  Tray,
+  ipcMain,
+  nativeImage,
+  screen,
+} = require("electron");
 const path = require("node:path");
 
 const PET_WINDOW = { width: 360, height: 260 };
 const SETUP_WINDOW = { width: 460, height: 600 };
 
 let sleepTimer;
+let buddyWindow;
+let tray;
+let trayHintShown = false;
 const reminderTimers = new Map();
 const windowModes = new WeakMap();
 const petWindowBounds = new WeakMap();
@@ -40,6 +52,79 @@ function setBuddyBounds(window, bounds) {
   if (!wasResizable) window.setResizable(false);
 }
 
+function showBuddy() {
+  clearTimeout(sleepTimer);
+  if (!buddyWindow || buddyWindow.isDestroyed()) {
+    createWindow();
+    return;
+  }
+  if (buddyWindow.isMinimized()) buddyWindow.restore();
+  buddyWindow.show();
+  buddyWindow.focus();
+}
+
+function hideBuddy(window = buddyWindow) {
+  if (!window || window.isDestroyed()) return;
+  window.hide();
+
+  if (trayHintShown) return;
+  trayHintShown = true;
+  if (!Notification.isSupported()) return;
+  try {
+    new Notification({
+      title: "Desktop Buddy is still running",
+      body: tray
+        ? "Click the tray icon, or open Desktop Buddy again, to bring your buddy back."
+        : "Open Desktop Buddy again to bring your buddy back.",
+    }).show();
+  } catch (error) {
+    console.error("Could not show the tray hint", error);
+  }
+}
+
+function updateTrayMenu() {
+  if (!tray) return;
+  const visible = Boolean(
+    buddyWindow && !buddyWindow.isDestroyed() && buddyWindow.isVisible(),
+  );
+  tray.setToolTip(
+    visible ? "Desktop Buddy" : "Desktop Buddy — click to bring me back",
+  );
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: "Show Desktop Buddy", enabled: !visible, click: showBuddy },
+      {
+        label: "Hide Desktop Buddy",
+        enabled: visible,
+        click: () => hideBuddy(),
+      },
+      { type: "separator" },
+      { label: "Quit Desktop Buddy", click: () => app.quit() },
+    ]),
+  );
+}
+
+function createTray() {
+  if (tray) return;
+  try {
+    const icon = nativeImage.createFromPath(
+      path.join(__dirname, "tray-icon.png"),
+    );
+    if (icon.isEmpty()) return;
+
+    tray = new Tray(icon);
+    tray.on("click", showBuddy);
+    tray.on("double-click", showBuddy);
+    updateTrayMenu();
+  } catch (error) {
+    // the pet must still start on systems without a tray; reopening the app
+    // brings a hidden buddy back even without one
+    console.error("Could not create the tray icon", error);
+    if (tray) tray.destroy();
+    tray = undefined;
+  }
+}
+
 function createWindow() {
   const window = new BrowserWindow({
     ...PET_WINDOW,
@@ -63,7 +148,17 @@ function createWindow() {
   const revealTimer = setTimeout(() => {
     if (!window.isDestroyed() && !window.isVisible()) window.show();
   }, 4000);
-  window.on("closed", () => clearTimeout(revealTimer));
+  // once the renderer has shown the window, the fallback is no longer needed
+  // and must not undo a deliberate hide later on
+  window.once("show", () => clearTimeout(revealTimer));
+  buddyWindow = window;
+  window.on("show", updateTrayMenu);
+  window.on("hide", updateTrayMenu);
+  window.on("closed", () => {
+    clearTimeout(revealTimer);
+    if (buddyWindow === window) buddyWindow = undefined;
+    updateTrayMenu();
+  });
 
   if (app.isPackaged || process.argv.includes("--production")) {
     window.loadFile(path.join(__dirname, "..", "dist", "index.html"));
@@ -96,6 +191,11 @@ ipcMain.on("sleep-window", (event, duration) => {
       window.focus();
     }
   }, Math.max(1000, duration));
+});
+
+ipcMain.on("hide-app", (event) => {
+  const window = BrowserWindow.fromWebContents(event.sender);
+  if (window) hideBuddy(window);
 });
 
 ipcMain.on("exit-app", () => app.quit());
@@ -167,13 +267,25 @@ ipcMain.on("cancel-reminder", (_event, id) => {
   }
 });
 
-app.whenReady().then(() => {
-  createWindow();
-
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  // Reopening the app while the buddy is hidden should bring the existing one
+  // back instead of starting a second copy.
+  app.on("second-instance", () => {
+    if (app.isReady()) showBuddy();
   });
-});
+
+  app.whenReady().then(() => {
+    if (process.platform === "win32") {
+      app.setAppUserModelId("com.adyasa.desktopbuddy");
+    }
+    createTray();
+    createWindow();
+
+    app.on("activate", showBuddy);
+  });
+}
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();

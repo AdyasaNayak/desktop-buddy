@@ -24,6 +24,7 @@ declare global {
       setWindowMode: (mode: "setup" | "pet") => void;
       moveWindow: (x: number, y: number) => void;
       sleepWindow: (duration: number) => void;
+      hideApp: () => void;
       exitApp: () => void;
       scheduleReminder: (id: number, text: string, remindAt: number) => void;
       cancelReminder: (id: number) => void;
@@ -738,10 +739,11 @@ export default function App() {
             </button>
             <button
               type="button"
-              className="buddy-menu__button buddy-menu__button--exit"
-              onClick={() => window.desktopBuddy?.exitApp()}
+              className="buddy-menu__button"
+              title="Hide in the system tray. Click the tray icon to bring me back."
+              onClick={() => window.desktopBuddy?.hideApp()}
             >
-              Exit
+              Hide buddy
             </button>
             <button
               type="button"
