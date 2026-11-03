@@ -2,6 +2,8 @@ name: Build Windows installer
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "v*"
   workflow_dispatch:
@@ -22,13 +24,27 @@ jobs:
       # release/artifact steps below, and electron-builder otherwise attempts
       # an implicit publish in CI and fails without a GitHub token.
       - run: npm run dist
+      - name: Read package version
+        id: package
+        shell: bash
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+      # Publish the installer when main changes so the download button never
+      # serves an app older than the website. Tags still publish themselves.
+      - name: Publish installer for this version
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: v${{ steps.package.outputs.version }}
+          name: Desktop Buddy v${{ steps.package.outputs.version }}
+          generate_release_notes: true
+          files: release/*.exe
       - name: Upload installer to the release for this tag
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v3
         with:
           files: release/*.exe
       - name: Save installer as a build artifact
-        if: "!startsWith(github.ref, 'refs/tags/')"
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v6
         with:
           name: desktop-buddy-windows-installer
