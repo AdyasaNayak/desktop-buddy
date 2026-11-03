@@ -493,38 +493,22 @@ export default function App() {
 
   if (profile === undefined) return null;
 
-  if (profile === null || renaming) {
-    if (!renaming && choosingPet) {
-      return (
-        <div style={centerStyle}>
-          <form
-            style={onboardingStyle}
-            onSubmit={(event) => {
-              event.preventDefault();
-              setChoosingPet(false);
-            }}
-          >
-            <strong>🐾 who's moving in?</strong>
-            <div style={{ display: "flex", gap: 8 }}>
-              {PET_TYPES.map((id) => (
-                <PetChoice
-                  key={id}
-                  pet={id}
-                  selected={petType === id}
-                  onClick={() => setPetType(id)}
-                />
-              ))}
-            </div>
-            <small style={{ color: "#7a6650", fontSize: 11, lineHeight: 1.3 }}>
-              all three buddies live in the same app. you can switch anytime
-              from the menu.
-            </small>
-            <button type="submit">meet {PETS[petType].label} →</button>
-          </form>
-        </div>
-      );
-    }
+  const quitApp = window.desktopBuddy
+    ? () => window.desktopBuddy?.exitApp()
+    : undefined;
 
+  if (profile === null) {
+    return (
+      <Onboarding
+        mode="welcome"
+        initialPet="cat"
+        onSave={(result) => void saveProfile(result)}
+        onQuit={quitApp}
+      />
+    );
+  }
+
+  if (renaming) {
     return (
       <Onboarding
         mode="rename"
@@ -753,10 +737,17 @@ export default function App() {
       )}
 
       {changingPet && (
-        <div style={dialogStyle}>
-          <div style={{ ...panelStyle, width: 260 }}>
-            <strong>who's moving in?</strong>
-            <div style={{ display: "flex", gap: 8 }}>
+        <div className="buddy-dialog">
+          <div
+            className="buddy-panel buddy-panel--pets"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pet-dialog-title"
+          >
+            <h2 id="pet-dialog-title" className="buddy-panel__title">
+              Who's moving in?
+            </h2>
+            <div className="pet-picker">
               {PET_TYPES.map((id) => (
                 <PetChoice
                   key={id}
@@ -779,45 +770,6 @@ export default function App() {
     </div>
   );
 }
-
-function PetPreview({ pet, size = 52 }: { pet: PetType; size?: number }) {
-  const definition = PETS[pet];
-  const frames = definition.frameCount.idle;
-  const win = definition.preview;
-  const scale = size / win.h;
-  return (
-    <div
-      style={{
-        width: win.w * scale,
-        height: size,
-        overflow: "hidden",
-        flex: "none",
-      }}
-    >
-      <div
-        className="pet-preview"
-        aria-hidden="true"
-        style={{
-          width: 64 * scale,
-          height: 64 * scale,
-          marginLeft: -win.x * scale,
-          marginTop: -win.y * scale,
-          backgroundImage: `url(${definition.sheets.idle})`,
-          backgroundSize: `${64 * scale * frames}px ${64 * scale}px`,
-          ["--pet-preview-frame-width" as string]: `${64 * scale}px`,
-          ["--pet-preview-frames" as string]: frames,
-          ["--pet-preview-duration" as string]: `${(frames * definition.frameMs.idle) / 1000}s`,
-        }}
-      />
-    </div>
-  );
-}
-
-const PET_CARD_PREVIEW: Record<PetType, number> = {
-  cat: 52,
-  star: 40,
-  hamster: 46,
-};
 
 function PetChoice({
   pet,
