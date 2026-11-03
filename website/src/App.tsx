@@ -86,7 +86,7 @@ const PERKS = [
     icon: "drop",
     tone: "sun",
     title: "Takes water breaks",
-    text: "Sips away while nudging you to drink some too.",
+    text: "You set the goal and the pace. Your buddy nudges you with encouraging little sips.",
   },
   {
     icon: "bell",
@@ -117,7 +117,7 @@ const FAQS: { q: string; a: string }[] = [
   },
   {
     q: "What can my buddy actually do?",
-    a: "It keeps you company while you work, takes adorable drink breaks, pins gentle reminders to your screen, and showers you with hearts when you pet it.",
+    a: "It keeps you company while you work, times your focus sessions and keeps a log of what you got done, nudges you to drink water on the goal and schedule you choose, pins gentle reminders to your screen, and showers you with hearts when you pet it.",
   },
   {
     q: "Can I choose between the cat, star, hamster, jellyfish, and dog?",

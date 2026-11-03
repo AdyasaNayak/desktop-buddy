@@ -330,6 +330,12 @@
   width: 100%;
 }
 
+.btn--compact {
+  min-height: 30px;
+  padding: 3px 9px;
+  font-size: 11px;
+}
+
 .btn--ghost {
   min-height: 34px;
   padding: 4px 8px;
@@ -353,6 +359,17 @@
 
 /* ---------- pet window: welcome, menu, dialogs ---------- */
 
+.buddy-overlay {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 5;
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  max-width: min(260px, calc(100vw - 16px));
+}
+
 .buddy-bubble {
   max-width: 250px;
   padding: 7px 12px;
@@ -363,6 +380,80 @@
   font-size: 12px;
   line-height: 1.45;
   box-shadow: 0 3px 0 var(--line), 0 10px 20px rgba(62, 47, 30, 0.16);
+}
+
+.buddy-bubble--water {
+  border-color: var(--water);
+  box-shadow: 0 3px 0 rgba(53, 93, 107, 0.28), 0 10px 20px rgba(62, 47, 30, 0.16);
+}
+
+.buddy-bubble__text {
+  margin: 0;
+}
+
+.buddy-bubble__meta {
+  margin: 0;
+  color: var(--water-deep);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.buddy-bubble__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.buddy-bubble__actions {
+  display: flex;
+  flex: none;
+  gap: 4px;
+}
+
+.buddy-bubble__actions .btn {
+  flex: none;
+  min-height: 26px;
+  padding: 2px 7px;
+  font-size: 10px;
+}
+
+.work-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 5px 9px;
+  border: 1.5px solid var(--bark);
+  border-radius: 999px;
+  background: var(--paper-raised);
+  color: var(--bark);
+  cursor: pointer;
+  box-shadow: 0 3px 0 var(--line), 0 8px 16px rgba(62, 47, 30, 0.16);
+}
+
+.work-pill:hover {
+  background: var(--sun-soft);
+}
+
+.work-pill__clock {
+  flex: none;
+  color: var(--leaf-deep);
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+}
+
+.work-pill__task {
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .buddy-menu {
@@ -441,6 +532,227 @@
   line-height: 1.3;
 }
 
+.buddy-panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.buddy-panel__title-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.buddy-panel__back {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1.5px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--bark-soft);
+  font: 700 16px/1 var(--font-body);
+  cursor: pointer;
+}
+
+.buddy-panel__back:hover {
+  border-color: var(--line);
+  background: var(--paper-sunk);
+  color: var(--bark);
+}
+
+.buddy-panel__close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-top: -2px;
+  padding: 0;
+  border: 1.5px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--bark-soft);
+  font: 700 18px/1 var(--font-body);
+  cursor: pointer;
+}
+
+.buddy-panel__close:hover {
+  border-color: var(--line);
+  background: var(--paper-sunk);
+  color: var(--bark);
+}
+
+.buddy-panel__hint {
+  margin: 0;
+  color: var(--bark-soft);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.buddy-panel__fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.buddy-panel__fields .field__label {
+  font-size: 11px;
+}
+
+.buddy-panel__fields .field__input {
+  min-height: 36px;
+  padding: 7px 9px;
+  font-size: 13px;
+}
+
+.water-progress {
+  display: grid;
+  gap: 4px;
+  padding: 6px 8px;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  background: var(--water-soft);
+}
+
+.water-progress__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.water-progress__count {
+  color: var(--water-deep);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.water-progress__count strong {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  font-weight: 400;
+}
+
+.water-progress__track {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(53, 93, 107, 0.16);
+}
+
+.water-progress__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--water);
+  transition: width 0.2s;
+}
+
+.work-task {
+  margin: 0;
+  overflow: hidden;
+  color: var(--bark);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.work-timer {
+  margin: 0;
+  color: var(--leaf-deep);
+  font-family: var(--font-pixel);
+  font-size: 30px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.work-log {
+  display: grid;
+  gap: 6px;
+}
+
+.work-log__live {
+  margin: 0;
+  color: var(--leaf-deep);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.work-log__summary {
+  margin: 0;
+  color: var(--bark-soft);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.work-log__section {
+  display: grid;
+  gap: 2px;
+}
+
+.work-log__label {
+  margin: 0;
+  color: var(--bark);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+}
+
+.work-log__list {
+  display: grid;
+  max-height: 76px;
+  overflow-y: auto;
+}
+
+.work-log__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px dashed var(--line);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.work-log__row:last-child {
+  border-bottom: none;
+}
+
+.work-log__name {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.work-log__name small {
+  color: var(--bark-soft);
+  font-size: 9px;
+  font-weight: 400;
+}
+
+.work-log__time {
+  flex: none;
+  color: var(--leaf-deep);
+  font-family: var(--font-pixel);
+  font-size: 9px;
+}
+
 .buddy-panel__form {
   display: grid;
   gap: 8px;
@@ -453,6 +765,35 @@
 
 .buddy-panel__row .btn {
   flex: 1;
+}
+
+.buddy-panel__row .btn--primary {
+  flex: 1.4;
+}
+
+.buddy-panel--water {
+  gap: 8px;
+  padding: 12px;
+}
+
+.buddy-panel--work {
+  gap: 8px;
+  padding: 12px;
+}
+
+.buddy-panel--water .buddy-panel__form {
+  gap: 7px;
+}
+
+.buddy-panel--water .btn {
+  min-height: 36px;
+  font-size: 13px;
+}
+
+.buddy-panel--water .btn--compact {
+  min-height: 27px;
+  padding: 2px 8px;
+  font-size: 10px;
 }
 
 .buddy-panel__error {
@@ -504,7 +845,8 @@
 @media (prefers-reduced-motion: reduce) {
   .btn,
   .field__input,
-  .pet-option {
+  .pet-option,
+  .water-progress__fill {
     transition: none;
   }
 }

@@ -1,8 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
-import { db, type Profile, type Reminder } from "./db";
+import {
+  db,
+  type Profile,
+  type Reminder,
+  type WaterPlan,
+  type WorkSession,
+} from "./db";
 import { Onboarding, type OnboardingResult } from "./Onboarding";
 import { PetPreview } from "./PetPreview";
+import { WaterPanel } from "./WaterPanel";
+import { WorkPanel } from "./WorkPanel";
 import {
   PETS,
   PET_PREVIEW_SIZE,
@@ -11,6 +19,15 @@ import {
   type PetState,
   type PetType,
 } from "./pets";
+import {
+  formatClock,
+  formatDuration,
+  formatInterval,
+  minutesFromNow,
+  nowMs,
+  todayKey,
+} from "./time";
+import { pickWaterMessage } from "./water";
 
 declare global {
   interface Window {
@@ -31,10 +48,18 @@ declare global {
 
 const SIZE = 160; // draw size - bigger = larger buddy
 
+// A running timer heartbeats every 30s. Three missed beats mean the machine
+// slept or the renderer froze, so the session stops at the last beat instead
+// of counting the gap as work.
+const WORK_HEARTBEAT_MS = 30 * 1000;
+const WORK_GAP_MS = 3 * WORK_HEARTBEAT_MS;
+// A reload or quick restart should keep the timer going; longer downtime is
+// saved at the last heartbeat instead of counting time the app was closed.
+const WORK_RESUME_GRACE_MS = 60 * 1000;
+
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const controlRef = useRef({ drinkLeft: 0, work: false });
-  const [workOn, setWorkOn] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [reminderOpen, setReminderOpen] = useState(false);
   const [sleepOpen, setSleepOpen] = useState(false);
@@ -51,14 +76,62 @@ export default function App() {
   const [renaming, setRenaming] = useState(false);
   const [welcome, setWelcome] = useState<string | null>(null);
   const [changingPet, setChangingPet] = useState(false);
+  const [waterPlan, setWaterPlan] = useState<WaterPlan | null>(null);
+  const [todayGlasses, setTodayGlasses] = useState(0);
+  const [waterOpen, setWaterOpen] = useState(false);
+  const [waterError, setWaterError] = useState("");
+  const [waterBreak, setWaterBreak] = useState<string | null>(null);
+  const [workOpen, setWorkOpen] = useState(false);
+  const [workSession, setWorkSession] = useState<WorkSession | null>(null);
+  const [workLog, setWorkLog] = useState<WorkSession[]>([]);
+  const [workError, setWorkError] = useState("");
+  const [now, setNow] = useState(() => nowMs());
   const positionRef = useRef<{ x: number; y: number } | null>(null);
   const welcomeTimer = useRef<number | null>(null);
+  const waterBreakTimer = useRef<number | null>(null);
+  const waterDayRef = useRef(todayKey());
+  const workHeartbeatRef = useRef(0);
   const showSetup = profile === null;
   // true once a profile exists (or is created), no form is shown, and the pet view can mount
   const petReady = profile !== undefined && !showSetup && !renaming;
   const activePet = profile ? toPetType(profile.petType) : "cat";
   const windowMode =
     profile === undefined ? null : showSetup || renaming ? "setup" : "pet";
+
+  const say = (text: string, ms = 6000) => {
+    setWelcome(text);
+    if (welcomeTimer.current !== null)
+      window.clearTimeout(welcomeTimer.current);
+    welcomeTimer.current = window.setTimeout(() => setWelcome(null), ms);
+  };
+
+  /** Persist the end of a focus session and take the pet out of work mode. */
+  const finishWork = async (session: WorkSession, endedAt: number) => {
+    if (!session.id) return false;
+    try {
+      await db.workSessions.update(session.id, {
+        endedAt,
+        lastActiveAt: endedAt,
+      });
+    } catch (error) {
+      console.error("Could not save the work session", error);
+      return false;
+    }
+
+    setWorkLog((current) =>
+      current.map((item) =>
+        item.id === session.id
+          ? { ...item, endedAt, lastActiveAt: endedAt }
+          : item,
+      ),
+    );
+    setWorkSession(null);
+    controlRef.current.work = false;
+    setWorkError("");
+    setWorkOpen(false);
+    workHeartbeatRef.current = 0;
+    return true;
+  };
 
   useEffect(() => {
     let active = true;
@@ -90,8 +163,210 @@ export default function App() {
     return () => {
       if (welcomeTimer.current !== null)
         window.clearTimeout(welcomeTimer.current);
+      if (waterBreakTimer.current !== null)
+        window.clearTimeout(waterBreakTimer.current);
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const loadWater = async () => {
+      try {
+        await db.open();
+        const [savedPlan, entries] = await Promise.all([
+          db.waterPlan.get("me"),
+          db.water.where("date").equals(todayKey()).toArray(),
+        ]);
+        if (!active) return;
+        setTodayGlasses(
+          entries.reduce((total, entry) => total + entry.amount, 0),
+        );
+        if (!savedPlan) {
+          setWaterPlan(null);
+          return;
+        }
+        if (savedPlan.enabled && savedPlan.nextReminderAt <= nowMs()) {
+          // don't ambush someone the moment the app opens after a long break
+          const next = {
+            ...savedPlan,
+            nextReminderAt: minutesFromNow(savedPlan.intervalMinutes),
+          };
+          setWaterPlan(next);
+          try {
+            await db.waterPlan.put(next);
+          } catch (error) {
+            console.error("Could not reschedule water reminder", error);
+          }
+        } else {
+          setWaterPlan(savedPlan);
+        }
+      } catch (error) {
+        console.error("Could not load water plan", error);
+        if (active) setWaterPlan(null);
+      }
+    };
+    void loadWater();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    // a daily glass counter has to start over when the date rolls over,
+    // even if the app has been sitting open all night
+    const timer = window.setInterval(() => {
+      const key = todayKey();
+      if (key === waterDayRef.current) return;
+      waterDayRef.current = key;
+      void db.water
+        .where("date")
+        .equals(key)
+        .toArray()
+        .then((entries) =>
+          setTodayGlasses(
+            entries.reduce((total, entry) => total + entry.amount, 0),
+          ),
+        )
+        .catch((error) => console.error("Could not refresh water log", error));
+    }, 60000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!petReady || !waterPlan?.enabled) return;
+
+    const fire = async () => {
+      const next = {
+        ...waterPlan,
+        nextReminderAt: minutesFromNow(waterPlan.intervalMinutes),
+      };
+      setWaterPlan(next);
+      setMenuOpen(false);
+      setWelcome(null);
+      if (welcomeTimer.current !== null) {
+        window.clearTimeout(welcomeTimer.current);
+        welcomeTimer.current = null;
+      }
+      setWaterBreak(pickWaterMessage());
+      if (waterBreakTimer.current !== null)
+        window.clearTimeout(waterBreakTimer.current);
+      waterBreakTimer.current = window.setTimeout(
+        () => setWaterBreak(null),
+        30000,
+      );
+      controlRef.current.drinkLeft = 3000;
+      try {
+        await db.waterPlan.put(next);
+      } catch (error) {
+        console.error("Could not save next water reminder", error);
+      }
+    };
+
+    const timer = window.setInterval(() => {
+      if (nowMs() >= waterPlan.nextReminderAt) void fire();
+    }, 15000);
+    return () => window.clearInterval(timer);
+  }, [petReady, waterPlan]);
+
+  useEffect(() => {
+    let active = true;
+    const loadWork = async () => {
+      try {
+        await db.open();
+        const sessions = await db.workSessions.orderBy("startedAt").toArray();
+        if (!active) return;
+
+        const openSessions = sessions.filter(
+          (session) => session.endedAt === undefined,
+        );
+        const latest = openSessions[openSessions.length - 1];
+        const lastSeen = latest
+          ? (latest.lastActiveAt ?? latest.startedAt)
+          : 0;
+
+        if (latest && nowMs() - lastSeen < WORK_RESUME_GRACE_MS) {
+          workHeartbeatRef.current = lastSeen;
+          setWorkSession(latest);
+          controlRef.current.work = true;
+          setNow(nowMs());
+          setWorkLog(sessions);
+          return;
+        }
+
+        if (openSessions.length > 0) {
+          // the app was closed for a while: end the session at its last
+          // heartbeat, not hours later when the app happened to reopen
+          for (const session of openSessions) {
+            if (session.id === undefined) continue;
+            const endedAt = Math.max(
+              session.startedAt,
+              session.lastActiveAt ?? session.startedAt,
+            );
+            try {
+              await db.workSessions.update(session.id, { endedAt });
+            } catch (error) {
+              console.error("Could not save interrupted work session", error);
+            }
+          }
+          if (!active) return;
+          setWorkLog(await db.workSessions.orderBy("startedAt").toArray());
+          return;
+        }
+
+        setWorkLog(sessions);
+      } catch (error) {
+        console.error("Could not load work log", error);
+      }
+    };
+    void loadWork();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!workSession?.id) return;
+    const id = workSession.id;
+    const timer = window.setInterval(() => {
+      const current = nowMs();
+      // don't erase a suspend gap; the watchdog below will close the session
+      if (current - workHeartbeatRef.current > WORK_GAP_MS) return;
+      workHeartbeatRef.current = current;
+      void db.workSessions
+        .update(id, { lastActiveAt: current })
+        .catch((error) =>
+          console.error("Could not update work heartbeat", error),
+        );
+    }, WORK_HEARTBEAT_MS);
+    return () => window.clearInterval(timer);
+  }, [workSession?.id]);
+
+  useEffect(() => {
+    if (!workSession) return;
+    const timer = window.setInterval(() => {
+      const current = nowMs();
+      if (current - workHeartbeatRef.current <= WORK_GAP_MS) {
+        setNow(current);
+        return;
+      }
+
+      // the machine slept or the renderer was frozen: end at the last beat
+      const endedAt = Math.max(
+        workSession.startedAt,
+        workHeartbeatRef.current,
+      );
+      workHeartbeatRef.current = current;
+      void finishWork(workSession, endedAt).then((saved) => {
+        if (!saved) return;
+        const duration = endedAt - workSession.startedAt;
+        say(
+          `saved ${duration < 60000 ? "under a minute" : formatDuration(duration)} on "${workSession.task}". i paused the timer while you were away.`,
+          8000,
+        );
+      });
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [workSession]);
 
   useEffect(() => {
     let active = true;
@@ -443,16 +718,142 @@ export default function App() {
     setReminders((current) => current.filter((reminder) => reminder.id !== id));
   };
 
+  const dismissWaterBreak = () => {
+    setWaterBreak(null);
+    if (waterBreakTimer.current !== null) {
+      window.clearTimeout(waterBreakTimer.current);
+      waterBreakTimer.current = null;
+    }
+  };
+
+  const saveWaterPlan = async (
+    glassesPerDay: number,
+    intervalMinutes: number,
+    enabled: boolean,
+  ) => {
+    const next: WaterPlan = {
+      id: "me",
+      glassesPerDay,
+      intervalMinutes,
+      enabled,
+      nextReminderAt: enabled ? minutesFromNow(intervalMinutes) : 0,
+    };
+    try {
+      await db.open();
+      await db.waterPlan.put(next);
+      setWaterPlan(next);
+      setWaterError("");
+      setWaterOpen(false);
+      dismissWaterBreak();
+      if (enabled) controlRef.current.drinkLeft = 1600;
+      say(
+        enabled
+          ? `okay! i'll nudge you every ${formatInterval(intervalMinutes)} toward ${glassesPerDay} glasses a day.`
+          : "water reminders paused. i'll wait.",
+        8000,
+      );
+    } catch (error) {
+      console.error("Could not save water plan", error);
+      const message = error instanceof Error ? error.message : String(error);
+      setWaterError(`Could not save your water plan: ${message}`);
+    }
+  };
+
+  const logGlass = async () => {
+    const goal = waterPlan?.glassesPerDay ?? 8;
+    try {
+      await db.open();
+      await db.water.add({ date: todayKey(), amount: 1, ts: nowMs() });
+    } catch (error) {
+      console.error("Could not log a glass of water", error);
+      const message = error instanceof Error ? error.message : String(error);
+      setWaterError(`Could not log your glass: ${message}`);
+      return;
+    }
+
+    setTodayGlasses((current) => current + 1);
+    controlRef.current.drinkLeft = 1600;
+    setWaterError("");
+
+    if (waterPlan?.enabled) {
+      const next = {
+        ...waterPlan,
+        nextReminderAt: minutesFromNow(waterPlan.intervalMinutes),
+      };
+      setWaterPlan(next);
+      try {
+        await db.waterPlan.put(next);
+      } catch (error) {
+        console.error("Could not reset the water reminder", error);
+      }
+    }
+
+    dismissWaterBreak();
+    if (!waterOpen)
+      say(`glug glug! ${todayGlasses + 1} of ${goal} glasses today.`);
+  };
+
+  const startWork = async (task: string) => {
+    try {
+      await db.open();
+      const startedAt = nowMs();
+      const session: WorkSession = {
+        task,
+        startedAt,
+        lastActiveAt: startedAt,
+      };
+      const id = await db.workSessions.add(session);
+      const saved = { ...session, id };
+      workHeartbeatRef.current = startedAt;
+      setWorkSession(saved);
+      setWorkLog((current) => [...current, saved]);
+      controlRef.current.work = true;
+      setNow(nowMs());
+      setWorkError("");
+      setWorkOpen(false);
+    } catch (error) {
+      console.error("Could not start the work timer", error);
+      const message = error instanceof Error ? error.message : String(error);
+      setWorkError(`Could not start the timer: ${message}`);
+    }
+  };
+
+  const stopWork = async () => {
+    const session = workSession;
+    if (!session?.id) return;
+
+    const endedAt = nowMs();
+    if (!(await finishWork(session, endedAt))) {
+      setWorkError("Could not save this session. Try stopping again.");
+      return;
+    }
+
+    const duration = endedAt - session.startedAt;
+    say(
+      `saved ${duration < 60000 ? "under a minute" : formatDuration(duration)} on "${session.task}". nice work!`,
+      8000,
+    );
+  };
+
+  const openWater = () => {
+    setWaterError("");
+    setMenuOpen(false);
+    setWaterOpen(true);
+  };
+
+  const openWork = () => {
+    setWorkError("");
+    setMenuOpen(false);
+    setWorkOpen(true);
+  };
+
   const announce = (pet: PetType, name: string, humanName: string) => {
     const greeting = PETS[pet].greeting;
-    setWelcome(
+    say(
       humanName
         ? `${greeting} i'm ${name}. hi, ${humanName}! click me for my menu.`
         : `${greeting} i'm ${name}. i live here now. click me for my menu.`,
     );
-    if (welcomeTimer.current !== null)
-      window.clearTimeout(welcomeTimer.current);
-    welcomeTimer.current = window.setTimeout(() => setWelcome(null), 6000);
   };
 
   const saveProfile = async (result: OnboardingResult) => {
@@ -526,11 +927,52 @@ export default function App() {
     <div style={{ position: "relative", width: "100vw", height: "100vh" }}>
       <canvas ref={canvasRef} style={{ display: "block" }} />
 
-      {welcome && (
-        <div style={{ position: "absolute", top: 8, left: 8, zIndex: 5 }}>
-          <div className="buddy-bubble">{welcome}</div>
-        </div>
-      )}
+      <div className="buddy-overlay">
+        {waterBreak ? (
+          <div className="buddy-bubble buddy-bubble--water" aria-live="polite">
+            <p className="buddy-bubble__text">{waterBreak}</p>
+            <div className="buddy-bubble__footer">
+              <p className="buddy-bubble__meta">
+                {todayGlasses} of {waterPlan?.glassesPerDay ?? 8} glasses
+                today
+              </p>
+              <div className="buddy-bubble__actions">
+                <button
+                  type="button"
+                  className="btn btn--primary btn--compact"
+                  onClick={() => void logGlass()}
+                >
+                  Drank one
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--compact"
+                  onClick={dismissWaterBreak}
+                >
+                  Later
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          welcome && <div className="buddy-bubble">{welcome}</div>
+        )}
+
+        {workSession && (
+          <button
+            type="button"
+            className="work-pill"
+            onClick={openWork}
+            title={`Working on ${workSession.task}`}
+            aria-label={`Open work timer for ${workSession.task}`}
+          >
+            <span className="work-pill__clock">
+              {formatClock(now - workSession.startedAt)}
+            </span>
+            <span className="work-pill__task">{workSession.task}</span>
+          </button>
+        )}
+      </div>
 
       <div
         style={{ position: "absolute", top: 8, left: 8, right: 8, zIndex: 10 }}
@@ -540,23 +982,16 @@ export default function App() {
             <button
               type="button"
               className="buddy-menu__button"
-              onClick={() => {
-                controlRef.current.drinkLeft = 2000;
-                setMenuOpen(false);
-              }}
+              onClick={openWater}
             >
               Drink water
             </button>
             <button
               type="button"
               className="buddy-menu__button"
-              onClick={() => {
-                controlRef.current.work = !controlRef.current.work;
-                setWorkOn((prev) => !prev);
-                setMenuOpen(false);
-              }}
+              onClick={openWork}
             >
-              {workOn ? "Stop work" : "Work mode"}
+              {workSession ? "Work (on)" : "Work mode"}
             </button>
             <button
               type="button"
@@ -733,6 +1168,35 @@ export default function App() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {waterOpen && (
+        <div className="buddy-dialog">
+          <WaterPanel
+            plan={waterPlan}
+            todayGlasses={todayGlasses}
+            error={waterError}
+            onSave={(glassesPerDay, intervalMinutes, enabled) =>
+              void saveWaterPlan(glassesPerDay, intervalMinutes, enabled)
+            }
+            onLogGlass={() => void logGlass()}
+            onClose={() => setWaterOpen(false)}
+          />
+        </div>
+      )}
+
+      {workOpen && (
+        <div className="buddy-dialog">
+          <WorkPanel
+            session={workSession}
+            sessions={workLog}
+            now={now}
+            error={workError}
+            onStart={(task) => void startWork(task)}
+            onStop={() => void stopWork()}
+            onClose={() => setWorkOpen(false)}
+          />
         </div>
       )}
 

@@ -22,10 +22,31 @@ export interface Reminder {
   notified: boolean;
 }
 
+/** How much water to aim for, and how often to be nudged. */
+export interface WaterPlan {
+  id: "me";
+  glassesPerDay: number;
+  intervalMinutes: number;
+  enabled: boolean;
+  nextReminderAt: number;
+}
+
+/** A focus session; `endedAt` is missing while the timer is running. */
+export interface WorkSession {
+  id?: number;
+  task: string;
+  startedAt: number;
+  /** Last heartbeat from the running app, so a restart can't count closed time. */
+  lastActiveAt?: number;
+  endedAt?: number;
+}
+
 class BuddyDB extends Dexie {
   profiles!: Table<Profile, string>;
   water!: Table<WaterEntry, number>;
   reminders!: Table<Reminder, number>;
+  waterPlan!: Table<WaterPlan, string>;
+  workSessions!: Table<WorkSession, number>;
 
   constructor() {
     super("buddyDB");
@@ -37,6 +58,13 @@ class BuddyDB extends Dexie {
       profiles: "id",
       water: "++id, date",
       reminders: "++id, remindAt",
+    });
+    this.version(3).stores({
+      profiles: "id",
+      water: "++id, date",
+      reminders: "++id, remindAt",
+      waterPlan: "id",
+      workSessions: "++id, startedAt",
     });
   }
 }
