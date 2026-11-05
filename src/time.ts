@@ -1,5 +1,8 @@
 const MINUTE = 60 * 1000;
 
+/** Reminders further out than this are almost always a typo. */
+export const MAX_REMINDER_AHEAD_MS = 365 * 24 * 60 * MINUTE;
+
 /** Compact human duration for logs: "45m", "2h", "1h 20m". */
 export function formatDuration(ms: number): string {
   const totalMinutes = Math.floor(Math.max(0, ms) / MINUTE);

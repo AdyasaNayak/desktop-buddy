@@ -5,7 +5,7 @@ import { Onboarding, type OnboardingResult } from "./Onboarding";
 import { PetPreview } from "./PetPreview";
 import { WaterPanel } from "./WaterPanel";
 import { WorkPanel } from "./WorkPanel";
-import { formatClock, formatInterval } from "./time";
+import { formatClock, formatInterval, MAX_REMINDER_AHEAD_MS } from "./time";
 import { useWaterReminder } from "./useWaterReminder";
 import { useWorkLog } from "./useWorkLog";
 import { usePendingAction } from "./usePendingAction";
@@ -52,6 +52,9 @@ export default function App() {
   const [reminderError, setReminderError] = useState("");
   const [minReminderAt] = useState(() =>
     toDateTimeLocalValue(new Date(Date.now() + 60000)),
+  );
+  const [maxReminderAt] = useState(() =>
+    toDateTimeLocalValue(new Date(Date.now() + MAX_REMINDER_AHEAD_MS)),
   );
   const [sleepMinutes, setSleepMinutes] = useState("15");
   // undefined = still loading, null = first run (show setup)
@@ -432,6 +435,10 @@ export default function App() {
       setReminderError("Choose a future date and time.");
       return;
     }
+    if (remindAt > Date.now() + MAX_REMINDER_AHEAD_MS) {
+      setReminderError("Choose a date within a year from now.");
+      return;
+    }
     return reminderAction.run(async () => {
       setReminderError("");
       try {
@@ -791,6 +798,7 @@ export default function App() {
                 type="datetime-local"
                 aria-label="Reminder time"
                 min={minReminderAt}
+                max={maxReminderAt}
                 value={reminderAt}
                 onChange={(event) => setReminderAt(event.target.value)}
               />

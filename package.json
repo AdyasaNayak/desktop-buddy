@@ -15,6 +15,7 @@
     "dist": "npm run build && electron-builder --win --publish never",
     "start": "electron . --production",
     "lint": "oxlint",
+    "test": "node --test \"tests/**/*.test.cjs\"",
     "preview": "vite preview"
   },
   "dependencies": {
