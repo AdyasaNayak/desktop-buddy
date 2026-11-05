@@ -9,6 +9,7 @@ const {
   screen,
 } = require("electron");
 const path = require("node:path");
+const { setLongTimeout, clearLongTimeout } = require("./long-timer.cjs");
 
 const PET_WINDOW = { width: 360, height: 260 };
 const SETUP_WINDOW = { width: 460, height: 600 };
@@ -247,24 +248,21 @@ ipcMain.on("set-login-item", (event, openAtLogin) => {
 ipcMain.on("schedule-reminder", (event, id, text, remindAt) => {
   if (!Number.isInteger(id) || typeof text !== "string" || !Number.isFinite(remindAt)) return;
 
-  const existing = reminderTimers.get(id);
-  if (existing) clearTimeout(existing);
+  clearLongTimeout(reminderTimers.get(id));
 
-  const delay = Math.max(0, remindAt - Date.now());
-  const timer = setTimeout(() => {
+  // reminders can be months away, which plain setTimeout cannot handle
+  const timer = setLongTimeout(remindAt, () => {
     reminderTimers.delete(id);
     new Notification({ title: "Desktop Buddy reminder", body: text }).show();
-    event.sender.send("reminder-fired", id);
-  }, delay);
+    // the window can be gone by the time a long reminder comes due
+    if (!event.sender.isDestroyed()) event.sender.send("reminder-fired", id);
+  });
   reminderTimers.set(id, timer);
 });
 
 ipcMain.on("cancel-reminder", (_event, id) => {
-  const timer = reminderTimers.get(id);
-  if (timer) {
-    clearTimeout(timer);
-    reminderTimers.delete(id);
-  }
+  clearLongTimeout(reminderTimers.get(id));
+  reminderTimers.delete(id);
 });
 
 if (!app.requestSingleInstanceLock()) {
