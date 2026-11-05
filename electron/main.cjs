@@ -10,6 +10,7 @@ const {
 } = require("electron");
 const path = require("node:path");
 const { setLongTimeout, clearLongTimeout } = require("./long-timer.cjs");
+const { setClickThrough } = require("./click-through.cjs");
 
 const PET_WINDOW = { width: 360, height: 260 };
 const SETUP_WINDOW = { width: 460, height: 600 };
@@ -152,6 +153,11 @@ function createWindow() {
   // once the renderer has shown the window, the fallback is no longer needed
   // and must not undo a deliberate hide later on
   window.once("show", () => clearTimeout(revealTimer));
+  // a reload starts fully interactive; the fresh renderer asks for
+  // click-through again once it knows where the buddy is drawn
+  window.webContents.on("did-start-loading", () =>
+    setClickThrough(window, false),
+  );
   buddyWindow = window;
   window.on("show", updateTrayMenu);
   window.on("hide", updateTrayMenu);
@@ -199,6 +205,11 @@ ipcMain.on("hide-app", (event) => {
   if (window) hideBuddy(window);
 });
 
+ipcMain.on("set-click-through", (event, ignore) => {
+  const window = BrowserWindow.fromWebContents(event.sender);
+  setClickThrough(window, ignore === true);
+});
+
 ipcMain.on("exit-app", () => app.quit());
 
 ipcMain.on("window-mode", (event, mode) => {
@@ -207,6 +218,8 @@ ipcMain.on("window-mode", (event, mode) => {
 
   const bounds = window.getBounds();
   if (mode === "setup") {
+    // the setup window is opaque, so it must catch every click
+    setClickThrough(window, false);
     // remember where a visible buddy was so renaming can put it back
     if (windowModes.get(window) === "pet") petWindowBounds.set(window, bounds);
     setBuddyBounds(window, setupBounds(screen.getDisplayMatching(bounds)));

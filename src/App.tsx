@@ -9,6 +9,8 @@ import { formatClock, formatInterval, MAX_REMINDER_AHEAD_MS } from "./time";
 import { useWaterReminder } from "./useWaterReminder";
 import { useWorkLog } from "./useWorkLog";
 import { usePendingAction } from "./usePendingAction";
+import { useClickThrough } from "./useClickThrough";
+import type { Rect } from "./clickThrough";
 import {
   PETS,
   PET_PREVIEW_SIZE,
@@ -26,6 +28,7 @@ declare global {
       moveWindow: (x: number, y: number) => void;
       sleepWindow: (duration: number) => void;
       hideApp: () => void;
+      setClickThrough: (ignore: boolean) => void;
       exitApp: () => void;
       scheduleReminder: (id: number, text: string, remindAt: number) => void;
       cancelReminder: (id: number) => void;
@@ -67,6 +70,7 @@ export default function App() {
   const profileAction = usePendingAction();
   const petAction = usePendingAction();
   const positionRef = useRef<{ x: number; y: number } | null>(null);
+  const petBoxRef = useRef<Rect | null>(null);
   const welcomeTimer = useRef<number | null>(null);
   const showSetup = profile === null;
   // true once a profile exists (or is created), no form is shown, and the pet view can mount
@@ -78,6 +82,7 @@ export default function App() {
     petReady,
   );
   const work = useWorkLog();
+  const refreshClickThrough = useClickThrough(petReady, petBoxRef);
   const windowMode =
     profile === undefined ? null : showSetup || renaming ? "setup" : "pet";
 
@@ -214,6 +219,7 @@ export default function App() {
       ? Math.max(0, Math.min(savedPosition.x, window.innerWidth - SIZE))
       : window.innerWidth / 2 - SIZE / 2;
     let y = savedPosition ? Math.min(savedPosition.y, groundY) : groundY;
+    petBoxRef.current = { x, y, width: SIZE, height: SIZE };
     let targetX = x;
     let isWalking = false;
     let isDragging = false;
@@ -389,6 +395,12 @@ export default function App() {
       // safety clamp: never let the buddy go below screen
       y = Math.max(0, Math.min(y, groundY));
       positionRef.current = { x, y };
+      const previousBox = petBoxRef.current;
+      if (!previousBox || previousBox.x !== x || previousBox.y !== y) {
+        petBoxRef.current = { x, y, width: SIZE, height: SIZE };
+        // the buddy may have walked under a pointer that is not moving
+        refreshClickThrough();
+      }
 
       // repaint only when pixels can actually change - constant repainting
       // of a transparent window keeps the compositor busy and feels laggy
@@ -420,10 +432,11 @@ export default function App() {
       canvas.removeEventListener("pointercancel", handlePointerUp);
       if (petTimeout) clearTimeout(petTimeout);
       cancelAnimationFrame(raf);
+      petBoxRef.current = null;
     };
     // re-run when the pet view mounts or the chosen buddy changes;
     // positionRef keeps a switch from teleporting the pet
-  }, [petReady, activePet]);
+  }, [petReady, activePet, refreshClickThrough]);
 
   const addReminder = () => {
     const remindAt = new Date(reminderAt).getTime();
