@@ -21,6 +21,7 @@ export function Onboarding({
   onSave,
   onCancel,
   onQuit,
+  saving = false,
 }: {
   mode: "welcome" | "rename";
   initialPet: PetType;
@@ -29,6 +30,7 @@ export function Onboarding({
   onSave: (result: OnboardingResult) => void;
   onCancel?: () => void;
   onQuit?: () => void;
+  saving?: boolean;
 }) {
   const [step, setStep] = useState<"pick" | "names">(mode === "rename" ? "names" : "pick");
   const [petType, setPetType] = useState(initialPet);
@@ -41,6 +43,7 @@ export function Onboarding({
 
   const save = (event: FormEvent) => {
     event.preventDefault();
+    if (saving) return;
     onSave({
       petType: shownPet,
       petName,
@@ -183,19 +186,35 @@ export function Onboarding({
             )}
 
             <div className="setup__actions">
-              <button className="btn btn--primary btn--block" type="submit">
-                {mode === "rename" ? "Save name" : "Move in"}
+              <button
+                className="btn btn--primary btn--block"
+                type="submit"
+                disabled={saving}
+              >
+                {saving
+                  ? mode === "rename"
+                    ? "Saving…"
+                    : "Moving in…"
+                  : mode === "rename"
+                    ? "Save name"
+                    : "Move in"}
               </button>
               {mode === "welcome" ? (
                 <button
                   className="btn btn--ghost btn--block"
                   type="button"
+                  disabled={saving}
                   onClick={() => setStep("pick")}
                 >
                   Choose a different buddy
                 </button>
               ) : (
-                <button className="btn btn--ghost btn--block" type="button" onClick={onCancel}>
+                <button
+                  className="btn btn--ghost btn--block"
+                  type="button"
+                  disabled={saving}
+                  onClick={onCancel}
+                >
                   Cancel
                 </button>
               )}

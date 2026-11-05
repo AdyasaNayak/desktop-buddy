@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import type { WorkSession } from "./db";
 import { formatClock, formatDuration, formatWhen } from "./time";
 import type { ActiveWork, TaskTotal } from "./useWorkLog";
+import { usePendingAction } from "./usePendingAction";
 
 export function WorkPanel({
   active,
@@ -24,20 +25,19 @@ export function WorkPanel({
   const [task, setTask] = useState("");
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
-  const [busy, setBusy] = useState(false);
+  const { pending, run: runPending } = usePendingAction();
 
-  const run = async (action: () => Promise<void>) => {
-    setBusy(true);
-    setError("");
-    try {
-      await action();
-    } catch (caught) {
-      const message = caught instanceof Error ? caught.message : String(caught);
-      setError(message);
-    } finally {
-      setBusy(false);
-    }
-  };
+  const run = (action: () => Promise<void>) =>
+    runPending(async () => {
+      setError("");
+      try {
+        await action();
+      } catch (caught) {
+        const message =
+          caught instanceof Error ? caught.message : String(caught);
+        setError(message);
+      }
+    });
 
   const start = (event: FormEvent) => {
     event.preventDefault();
@@ -120,7 +120,7 @@ export function WorkPanel({
               <button
                 className="btn btn--primary btn--block"
                 type="button"
-                disabled={busy}
+                disabled={pending}
                 onClick={stop}
               >
                 Stop &amp; save
@@ -145,7 +145,7 @@ export function WorkPanel({
               <button
                 className="btn btn--primary btn--block"
                 type="submit"
-                disabled={busy}
+                disabled={pending}
               >
                 Start timer
               </button>

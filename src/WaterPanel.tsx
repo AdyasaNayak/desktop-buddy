@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import type { WaterPlan } from "./db";
 import { formatDuration, formatInterval } from "./time";
+import { usePendingAction } from "./usePendingAction";
 
 const AMOUNT_OPTIONS = [
   { value: 100, label: "a few sips (100 ml)" },
@@ -41,21 +42,20 @@ export function WaterPanel({
   const [editing, setEditing] = useState(!plan?.enabled);
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
-  const [busy, setBusy] = useState(false);
+  const { pending, run: runPending } = usePendingAction();
   const enabled = Boolean(plan?.enabled);
 
-  const run = async (action: () => Promise<void>) => {
-    setBusy(true);
-    setError("");
-    try {
-      await action();
-    } catch (caught) {
-      const message = caught instanceof Error ? caught.message : String(caught);
-      setError(`Could not save that: ${message}`);
-    } finally {
-      setBusy(false);
-    }
-  };
+  const run = (action: () => Promise<void>) =>
+    runPending(async () => {
+      setError("");
+      try {
+        await action();
+      } catch (caught) {
+        const message =
+          caught instanceof Error ? caught.message : String(caught);
+        setError(`Could not save that: ${message}`);
+      }
+    });
 
   const save = (event: FormEvent) => {
     event.preventDefault();
@@ -117,7 +117,7 @@ export function WaterPanel({
               <button
                 className="btn"
                 type="button"
-                disabled={busy}
+                disabled={pending}
                 onClick={drink}
               >
                 I drank {plan.amountMl} ml
@@ -125,7 +125,7 @@ export function WaterPanel({
               <button
                 className="btn"
                 type="button"
-                disabled={busy}
+                disabled={pending}
                 onClick={() => {
                   onPreview();
                   onClose();
@@ -145,7 +145,7 @@ export function WaterPanel({
               <button
                 className="btn btn--ghost"
                 type="button"
-                disabled={busy}
+                disabled={pending}
                 onClick={stop}
               >
                 Stop reminders
@@ -192,7 +192,7 @@ export function WaterPanel({
               <button
                 className="btn btn--primary"
                 type="submit"
-                disabled={busy}
+                disabled={pending}
               >
                 {enabled ? "Save schedule" : "Start reminders"}
               </button>

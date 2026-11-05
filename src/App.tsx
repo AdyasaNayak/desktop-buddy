@@ -8,6 +8,7 @@ import { WorkPanel } from "./WorkPanel";
 import { formatClock, formatInterval } from "./time";
 import { useWaterReminder } from "./useWaterReminder";
 import { useWorkLog } from "./useWorkLog";
+import { usePendingAction } from "./usePendingAction";
 import {
   PETS,
   PET_PREVIEW_SIZE,
@@ -58,8 +59,10 @@ export default function App() {
   const [renaming, setRenaming] = useState(false);
   const [welcome, setWelcome] = useState<string | null>(null);
   const [changingPet, setChangingPet] = useState(false);
-  const [waterBusy, setWaterBusy] = useState(false);
-  const waterActionRef = useRef(false);
+  const waterAction = usePendingAction();
+  const reminderAction = usePendingAction();
+  const profileAction = usePendingAction();
+  const petAction = usePendingAction();
   const positionRef = useRef<{ x: number; y: number } | null>(null);
   const welcomeTimer = useRef<number | null>(null);
   const showSetup = profile === null;
@@ -419,7 +422,7 @@ export default function App() {
     // positionRef keeps a switch from teleporting the pet
   }, [petReady, activePet]);
 
-  const addReminder = async () => {
+  const addReminder = () => {
     const remindAt = new Date(reminderAt).getTime();
     if (!reminderText.trim()) {
       setReminderError("Enter a reminder message.");
@@ -429,37 +432,39 @@ export default function App() {
       setReminderError("Choose a future date and time.");
       return;
     }
-    setReminderError("");
-    try {
-      await db.open();
-      const id = await db.reminders.add({
-        text: reminderText.trim(),
-        remindAt,
-        notified: false,
-      });
-      const savedReminder = { id, text: reminderText.trim(), remindAt };
-      window.desktopBuddy?.scheduleReminder(
-        savedReminder.id,
-        savedReminder.text,
-        savedReminder.remindAt,
-      );
-      setReminders(await db.reminders.orderBy("remindAt").toArray());
-      if (
-        !window.desktopBuddy &&
-        "Notification" in window &&
-        Notification.permission === "default"
-      ) {
-        void Notification.requestPermission().catch(() => undefined);
-      }
-      setReminderText("");
-      setReminderAt("");
+    return reminderAction.run(async () => {
       setReminderError("");
-      setReminderOpen(false);
-    } catch (error) {
-      console.error("Could not save reminder", error);
-      const message = error instanceof Error ? error.message : String(error);
-      setReminderError(`Could not save reminder: ${message}`);
-    }
+      try {
+        await db.open();
+        const id = await db.reminders.add({
+          text: reminderText.trim(),
+          remindAt,
+          notified: false,
+        });
+        const savedReminder = { id, text: reminderText.trim(), remindAt };
+        window.desktopBuddy?.scheduleReminder(
+          savedReminder.id,
+          savedReminder.text,
+          savedReminder.remindAt,
+        );
+        setReminders(await db.reminders.orderBy("remindAt").toArray());
+        if (
+          !window.desktopBuddy &&
+          "Notification" in window &&
+          Notification.permission === "default"
+        ) {
+          void Notification.requestPermission().catch(() => undefined);
+        }
+        setReminderText("");
+        setReminderAt("");
+        setReminderError("");
+        setReminderOpen(false);
+      } catch (error) {
+        console.error("Could not save reminder", error);
+        const message = error instanceof Error ? error.message : String(error);
+        setReminderError(`Could not save reminder: ${message}`);
+      }
+    });
   };
 
   const removeReminder = async (id: number) => {
@@ -497,21 +502,15 @@ export default function App() {
     showBubble("water reminders are off. drink whenever you feel like it.");
   };
 
-  const runWaterAction = async (action: () => Promise<void>) => {
-    // the ref blocks a double-click before React can re-render the disabled state
-    if (waterActionRef.current) return;
-    waterActionRef.current = true;
-    setWaterBusy(true);
-    try {
-      await action();
-    } catch (error) {
-      console.error("Could not update water reminder", error);
-      showBubble("could not update your water break. one more try?");
-    } finally {
-      waterActionRef.current = false;
-      setWaterBusy(false);
-    }
-  };
+  const runWaterAction = (action: () => Promise<void>) =>
+    waterAction.run(async () => {
+      try {
+        await action();
+      } catch (error) {
+        console.error("Could not update water reminder", error);
+        showBubble("could not update your water break. one more try?");
+      }
+    });
 
   const drankFromPrompt = () =>
     runWaterAction(async () => {
@@ -536,40 +535,43 @@ export default function App() {
     showBubble(`focus mode on: ${task.trim()}. i'll keep time.`, 5000);
   };
 
-  const saveProfile = async (result: OnboardingResult) => {
-    const saved: Profile = {
-      id: "me",
-      petName: result.petName.trim() || "Mochi",
-      yourName: result.yourName.trim(),
-      petType: result.petType,
-    };
-    try {
-      await db.profiles.put(saved);
-    } catch (error) {
-      console.error("Could not save profile", error);
-    }
-    // login-item registration is a first-run choice only; renaming never
-    // silently re-applies (or ignores) the startup checkbox
-    if (result.startWithWindows && window.desktopBuddy?.isPackaged) {
-      window.desktopBuddy.setLoginItem(true);
-    }
-    setProfile(saved);
-    setRenaming(false);
-    announce(saved.petType, saved.petName, saved.yourName);
-  };
+  const saveProfile = (result: OnboardingResult) =>
+    profileAction.run(async () => {
+      const saved: Profile = {
+        id: "me",
+        petName: result.petName.trim() || "Mochi",
+        yourName: result.yourName.trim(),
+        petType: result.petType,
+      };
+      try {
+        await db.profiles.put(saved);
+      } catch (error) {
+        console.error("Could not save profile", error);
+      }
+      // login-item registration is a first-run choice only; renaming never
+      // silently re-applies (or ignores) the startup checkbox
+      if (result.startWithWindows && window.desktopBuddy?.isPackaged) {
+        window.desktopBuddy.setLoginItem(true);
+      }
+      setProfile(saved);
+      setRenaming(false);
+      announce(saved.petType, saved.petName, saved.yourName);
+    });
 
-  const changePet = async (nextPet: PetType) => {
+  const changePet = (nextPet: PetType) => {
     if (!profile) return;
-    const next: Profile = { ...profile, petType: nextPet };
-    try {
-      await db.profiles.put(next);
-    } catch (error) {
-      console.error("Could not save pet choice", error);
-    }
-    setProfile(next);
-    setChangingPet(false);
-    setMenuOpen(false);
-    announce(nextPet, next.petName, next.yourName);
+    return petAction.run(async () => {
+      const next: Profile = { ...profile, petType: nextPet };
+      try {
+        await db.profiles.put(next);
+      } catch (error) {
+        console.error("Could not save pet choice", error);
+      }
+      setProfile(next);
+      setChangingPet(false);
+      setMenuOpen(false);
+      announce(nextPet, next.petName, next.yourName);
+    });
   };
 
   if (profile === undefined) return null;
@@ -585,6 +587,7 @@ export default function App() {
         initialPet="cat"
         onSave={(result) => void saveProfile(result)}
         onQuit={quitApp}
+        saving={profileAction.pending}
       />
     );
   }
@@ -599,6 +602,7 @@ export default function App() {
         onSave={(result) => void saveProfile(result)}
         onCancel={() => setRenaming(false)}
         onQuit={quitApp}
+        saving={profileAction.pending}
       />
     );
   }
@@ -628,7 +632,7 @@ export default function App() {
               <button
                 type="button"
                 className="buddy-mini-btn"
-                disabled={waterBusy}
+                disabled={waterAction.pending}
                 onClick={() => void drankFromPrompt()}
               >
                 drank it
@@ -636,7 +640,7 @@ export default function App() {
               <button
                 type="button"
                 className="buddy-mini-btn"
-                disabled={waterBusy}
+                disabled={waterAction.pending}
                 onClick={() => void snoozeWater()}
               >
                 10 min
@@ -644,7 +648,7 @@ export default function App() {
               <button
                 type="button"
                 className="buddy-mini-btn buddy-mini-btn--quiet"
-                disabled={waterBusy}
+                disabled={waterAction.pending}
                 onClick={() => void turnOffWater()}
               >
                 stop nudges
@@ -794,8 +798,8 @@ export default function App() {
                 <p className="buddy-panel__error">{reminderError}</p>
               )}
               <div className="buddy-panel__row">
-                <button className="btn btn--primary" type="submit">
-                  Add reminder
+                <button className="btn btn--primary" type="submit" disabled={reminderAction.pending}>
+                  {reminderAction.pending ? "Adding…" : "Add reminder"}
                 </button>
                 <button
                   className="btn"
@@ -918,6 +922,7 @@ export default function App() {
                   key={id}
                   pet={id}
                   selected={activePet === id}
+                  disabled={petAction.pending}
                   onClick={() => void changePet(id)}
                 />
               ))}
@@ -925,6 +930,7 @@ export default function App() {
             <button
               type="button"
               className="btn btn--ghost btn--block"
+              disabled={petAction.pending}
               onClick={() => setChangingPet(false)}
             >
               Cancel
@@ -939,10 +945,12 @@ export default function App() {
 function PetChoice({
   pet,
   selected,
+  disabled,
   onClick,
 }: {
   pet: PetType;
   selected: boolean;
+  disabled: boolean;
   onClick: () => void;
 }) {
   return (
@@ -950,6 +958,7 @@ function PetChoice({
       type="button"
       className="pet-option"
       aria-pressed={selected}
+      disabled={disabled}
       onClick={onClick}
     >
       <span className="pet-option__preview">
