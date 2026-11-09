@@ -42,7 +42,8 @@ and a desktop app cannot run code while it is closed.
 
 - Keep Desktop Buddy running for reminders to fire at their scheduled time.
   Use **Hide buddy** (or the tray icon) to get it off the screen without
-  quitting.
+  quitting. To quit completely, choose **Quit** in the buddy's menu or the
+  tray menu.
 - When you reopen the app after one or more reminder times have passed, the
   overdue reminders arrive as **one combined notification** (for example,
   "3 reminders came due while I was closed") instead of a burst of separate
