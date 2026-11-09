@@ -11,9 +11,15 @@ const {
 const path = require("node:path");
 const { setLongTimeout, clearLongTimeout } = require("./long-timer.cjs");
 const { setClickThrough } = require("./click-through.cjs");
+const {
+  clampToArea,
+  readWindowPosition,
+  writeWindowPosition,
+} = require("./window-position.cjs");
 
 const PET_WINDOW = { width: 360, height: 260 };
 const SETUP_WINDOW = { width: 460, height: 600 };
+const POSITION_SAVE_DELAY = 250;
 // Reminders already past this instant were missed while the app was closed.
 // Kept separate from renderer load time so a reload cannot re-classify a
 // reminder that came due while the app was running.
@@ -23,6 +29,8 @@ let sleepTimer;
 let buddyWindow;
 let tray;
 let trayHintShown = false;
+let pendingWindowPosition;
+let positionSaveTimer;
 const reminderTimers = new Map();
 const windowModes = new WeakMap();
 const petWindowBounds = new WeakMap();
@@ -41,12 +49,44 @@ function setupBounds(display) {
 }
 
 function clampToWorkArea(bounds) {
-  const area = screen.getDisplayMatching(bounds).workArea;
-  return {
-    ...bounds,
-    x: Math.min(Math.max(bounds.x, area.x), area.x + area.width - bounds.width),
-    y: Math.min(Math.max(bounds.y, area.y), area.y + area.height - bounds.height),
-  };
+  return clampToArea(bounds, screen.getDisplayMatching(bounds).workArea);
+}
+
+function windowPositionFile() {
+  return path.join(app.getPath("userData"), "window-position.json");
+}
+
+function loadPetPosition() {
+  const saved = readWindowPosition(windowPositionFile());
+  if (!saved) return null;
+  // the monitor the buddy was left on may be gone since the last run
+  const bounds = clampToWorkArea({ ...PET_WINDOW, ...saved });
+  return { x: bounds.x, y: bounds.y };
+}
+
+function flushWindowPosition() {
+  if (positionSaveTimer) {
+    clearTimeout(positionSaveTimer);
+    positionSaveTimer = undefined;
+  }
+  if (!pendingWindowPosition) return;
+
+  const position = pendingWindowPosition;
+  pendingWindowPosition = undefined;
+  if (!writeWindowPosition(windowPositionFile(), position)) {
+    console.error("Could not save the buddy window position");
+  }
+}
+
+function savePetPosition(window, bounds = window.getBounds()) {
+  if (!window || window.isDestroyed()) return;
+  // the setup/rename window is centered on purpose, so only remember the pet
+  if (windowModes.get(window) !== "pet") return;
+
+  pendingWindowPosition = { x: bounds.x, y: bounds.y };
+  // coalesce the many moves that arrive during a drag into occasional writes
+  if (positionSaveTimer) return;
+  positionSaveTimer = setTimeout(flushWindowPosition, POSITION_SAVE_DELAY);
 }
 
 function setBuddyBounds(window, bounds) {
@@ -132,8 +172,10 @@ function createTray() {
 }
 
 function createWindow() {
+  const savedPosition = loadPetPosition();
   const window = new BrowserWindow({
     ...PET_WINDOW,
+    ...(savedPosition ?? {}),
     show: false,
     transparent: true,
     frame: false,
@@ -165,6 +207,10 @@ function createWindow() {
   buddyWindow = window;
   window.on("show", updateTrayMenu);
   window.on("hide", updateTrayMenu);
+  window.on("close", () => {
+    savePetPosition(window);
+    flushWindowPosition();
+  });
   window.on("closed", () => {
     clearTimeout(revealTimer);
     if (buddyWindow === window) buddyWindow = undefined;
@@ -185,9 +231,15 @@ ipcMain.on("window-position", (event) => {
 
 ipcMain.on("move-window", (event, x, y) => {
   const window = BrowserWindow.fromWebContents(event.sender);
-  if (window && Number.isFinite(x) && Number.isFinite(y)) {
-    window.setPosition(Math.round(x), Math.round(y));
-  }
+  if (!window || !Number.isFinite(x) || !Number.isFinite(y)) return;
+
+  const bounds = clampToWorkArea({
+    ...window.getBounds(),
+    x: Math.round(x),
+    y: Math.round(y),
+  });
+  window.setPosition(bounds.x, bounds.y);
+  savePetPosition(window, bounds);
 });
 
 ipcMain.on("sleep-window", (event, duration) => {
@@ -225,7 +277,10 @@ ipcMain.on("window-mode", (event, mode) => {
     // the setup window is opaque, so it must catch every click
     setClickThrough(window, false);
     // remember where a visible buddy was so renaming can put it back
-    if (windowModes.get(window) === "pet") petWindowBounds.set(window, bounds);
+    if (windowModes.get(window) === "pet") {
+      petWindowBounds.set(window, bounds);
+      savePetPosition(window, bounds);
+    }
     setBuddyBounds(window, setupBounds(screen.getDisplayMatching(bounds)));
   } else {
     const saved = petWindowBounds.get(window);
@@ -246,6 +301,7 @@ ipcMain.on("window-mode", (event, mode) => {
 
   windowModes.set(window, mode);
   if (!window.isVisible()) window.show();
+  if (mode === "pet") savePetPosition(window);
 });
 
 ipcMain.on("is-packaged", (event) => {
@@ -320,6 +376,8 @@ if (!app.requestSingleInstanceLock()) {
     app.on("activate", showBuddy);
   });
 }
+
+app.on("before-quit", flushWindowPosition);
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
