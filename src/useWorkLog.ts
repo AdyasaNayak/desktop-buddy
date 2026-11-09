@@ -1,10 +1,17 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { db, type WorkSession } from "./db";
+import {
+  elapsedWorkMs,
+  isOpenSession,
+  planWorkStartup,
+} from "./workSessions";
 
 export interface ActiveWork {
   id: number;
   task: string;
   startedAt: number;
+  /** Time excluded because the app was closed while the timer was running. */
+  pausedMs: number;
 }
 
 export interface TaskTotal {
@@ -20,38 +27,59 @@ async function readLog(): Promise<WorkSession[]> {
   return db.workSessions.orderBy("startedAt").reverse().toArray();
 }
 
+function toActive(session: WorkSession): ActiveWork {
+  return {
+    id: session.id!,
+    task: session.task,
+    startedAt: session.startedAt,
+    pausedMs: Math.max(0, session.pausedMs ?? 0),
+  };
+}
+
 /**
- * Keeps the running task timer and the saved work log. Sessions left open by
- * a quit or crash are closed at their last heartbeat when the app starts, so
- * time spent with the app closed never lands in the log.
+ * Keeps the running task timer and the saved work log. A session that was
+ * still running when the app quit or crashed is resumed from its last
+ * heartbeat; time spent with the app closed is paused instead of counted.
  */
 export function useWorkLog() {
   const [active, setActive] = useState<ActiveWork | null>(null);
   const [sessions, setSessions] = useState<WorkSession[]>([]);
   const [now, setNow] = useState(() => Date.now());
+  const starting = useRef(false);
+  const loaded = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     let alive = true;
     const load = async () => {
       try {
-        const open = await db.workSessions
-          .filter((session) => session.endedAt === undefined)
-          .toArray();
-        for (const session of open) {
-          const endedAt = session.heartbeatAt ?? session.startedAt;
-          await db.workSessions.update(session.id!, {
-            endedAt,
-            durationMs: Math.max(0, endedAt - session.startedAt),
-            heartbeatAt: endedAt,
-          });
-        }
+        const resumed = await db.transaction(
+          "rw",
+          db.workSessions,
+          async () => {
+            const open = await db.workSessions
+              .filter(isOpenSession)
+              .toArray();
+            const plan = planWorkStartup(open, Date.now());
+            for (const session of plan.closed) {
+              await db.workSessions.put(session);
+            }
+            if (plan.resume) await db.workSessions.put(plan.resume);
+            return plan.resume;
+          },
+        );
         const saved = await readLog();
-        if (alive) setSessions(saved);
+        if (!alive) return;
+        setSessions(saved);
+        if (resumed) {
+          setNow(Date.now());
+          setActive(toActive(resumed));
+        }
       } catch (error) {
         console.error("Could not load the work log", error);
       }
     };
-    void load();
+    const promise = load();
+    loaded.current = promise;
     return () => {
       alive = false;
     };
@@ -74,21 +102,39 @@ export function useWorkLog() {
   const start = useCallback(async (task: string) => {
     const trimmed = task.trim();
     if (!trimmed) throw new Error("Tell me what you're working on first.");
-    const startedAt = Date.now();
-    const id = await db.workSessions.add({
-      task: trimmed,
-      startedAt,
-      durationMs: 0,
-      heartbeatAt: startedAt,
-    });
-    setNow(startedAt);
-    setActive({ id, task: trimmed, startedAt });
+    if (starting.current) throw new Error("A timer is already starting.");
+    starting.current = true;
+    try {
+      // The first load reconciles timers left open by the previous run, so a
+      // start never races it and creates a second open session.
+      await loaded.current;
+      const startedAt = Date.now();
+      const id = await db.transaction("rw", db.workSessions, async () => {
+        const open = await db.workSessions.filter(isOpenSession).first();
+        if (open) {
+          throw new Error(
+            `A timer is already running for "${open.task}". Stop it first.`,
+          );
+        }
+        return db.workSessions.add({
+          task: trimmed,
+          startedAt,
+          durationMs: 0,
+          pausedMs: 0,
+          heartbeatAt: startedAt,
+        });
+      });
+      setNow(startedAt);
+      setActive({ id, task: trimmed, startedAt, pausedMs: 0 });
+    } finally {
+      starting.current = false;
+    }
   }, []);
 
   const stop = useCallback(async () => {
     if (!active) return 0;
     const endedAt = Date.now();
-    const durationMs = Math.max(0, endedAt - active.startedAt);
+    const durationMs = elapsedWorkMs(active, endedAt);
     await db.workSessions.update(active.id, {
       endedAt,
       durationMs,
@@ -99,7 +145,7 @@ export function useWorkLog() {
     return durationMs;
   }, [active]);
 
-  const elapsedMs = active ? Math.max(0, now - active.startedAt) : 0;
+  const elapsedMs = active ? elapsedWorkMs(active, now) : 0;
 
   const totals = useMemo(() => {
     const grouped = new Map<string, TaskTotal>();

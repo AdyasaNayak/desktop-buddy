@@ -115,6 +115,12 @@ export function WorkPanel({
                 <p className="work-active__since">
                   started {formatWhen(active.startedAt)} · still counting
                 </p>
+                {active.pausedMs > 0 && (
+                  <p className="work-active__since">
+                    resumed after a restart · time while I was closed isn&apos;t
+                    counted
+                  </p>
+                )}
               </div>
               {error && <p className="buddy-panel__error">{error}</p>}
               <button
