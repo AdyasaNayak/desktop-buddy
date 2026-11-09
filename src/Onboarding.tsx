@@ -22,6 +22,7 @@ export function Onboarding({
   onCancel,
   onQuit,
   saving = false,
+  error = "",
 }: {
   mode: "welcome" | "rename";
   initialPet: PetType;
@@ -31,6 +32,7 @@ export function Onboarding({
   onCancel?: () => void;
   onQuit?: () => void;
   saving?: boolean;
+  error?: string;
 }) {
   const [step, setStep] = useState<"pick" | "names">(mode === "rename" ? "names" : "pick");
   const [petType, setPetType] = useState(initialPet);
@@ -183,6 +185,12 @@ export function Onboarding({
                 />
                 start me when my computer turns on
               </label>
+            )}
+
+            {error && (
+              <p className="buddy-panel__error" role="alert">
+                {error}
+              </p>
             )}
 
             <div className="setup__actions">

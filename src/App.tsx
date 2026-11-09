@@ -69,6 +69,7 @@ export default function App() {
   const [sleepMinutes, setSleepMinutes] = useState("15");
   // undefined = still loading, null = first run (show setup)
   const [profile, setProfile] = useState<Profile | null | undefined>(undefined);
+  const [profileError, setProfileError] = useState("");
   const [renaming, setRenaming] = useState(false);
   const [welcome, setWelcome] = useState<string | null>(null);
   const [changingPet, setChangingPet] = useState(false);
@@ -585,6 +586,7 @@ export default function App() {
 
   const saveProfile = (result: OnboardingResult) =>
     profileAction.run(async () => {
+      setProfileError("");
       const saved: Profile = {
         id: "me",
         petName: result.petName.trim() || "Mochi",
@@ -595,6 +597,9 @@ export default function App() {
         await db.profiles.put(saved);
       } catch (error) {
         console.error("Could not save profile", error);
+        const message = error instanceof Error ? error.message : String(error);
+        setProfileError(`Could not save your buddy: ${message}`);
+        return;
       }
       // login-item registration is a first-run choice only; renaming never
       // silently re-applies (or ignores) the startup checkbox
@@ -609,11 +614,15 @@ export default function App() {
   const changePet = (nextPet: PetType) => {
     if (!profile) return;
     return petAction.run(async () => {
+      setProfileError("");
       const next: Profile = { ...profile, petType: nextPet };
       try {
         await db.profiles.put(next);
       } catch (error) {
         console.error("Could not save pet choice", error);
+        const message = error instanceof Error ? error.message : String(error);
+        setProfileError(`Could not save your new buddy: ${message}`);
+        return;
       }
       setProfile(next);
       setChangingPet(false);
@@ -636,6 +645,7 @@ export default function App() {
         onSave={(result) => void saveProfile(result)}
         onQuit={quitApp}
         saving={profileAction.pending}
+        error={profileError}
       />
     );
   }
@@ -648,9 +658,13 @@ export default function App() {
         initialPetName={profile.petName}
         initialYourName={profile.yourName}
         onSave={(result) => void saveProfile(result)}
-        onCancel={() => setRenaming(false)}
+        onCancel={() => {
+          setProfileError("");
+          setRenaming(false);
+        }}
         onQuit={quitApp}
         saving={profileAction.pending}
+        error={profileError}
       />
     );
   }
@@ -773,6 +787,7 @@ export default function App() {
               type="button"
               className="buddy-menu__button"
               onClick={() => {
+                setProfileError("");
                 setRenaming(true);
                 setMenuOpen(false);
               }}
@@ -783,6 +798,7 @@ export default function App() {
               type="button"
               className="buddy-menu__button"
               onClick={() => {
+                setProfileError("");
                 setChangingPet(true);
                 setMenuOpen(false);
               }}
@@ -980,11 +996,19 @@ export default function App() {
                 />
               ))}
             </div>
+            {profileError && (
+              <p className="buddy-panel__error" role="alert">
+                {profileError}
+              </p>
+            )}
             <button
               type="button"
               className="btn btn--ghost btn--block"
               disabled={petAction.pending}
-              onClick={() => setChangingPet(false)}
+              onClick={() => {
+                setProfileError("");
+                setChangingPet(false);
+              }}
             >
               Cancel
             </button>
