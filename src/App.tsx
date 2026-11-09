@@ -6,6 +6,11 @@ import { PetPreview } from "./PetPreview";
 import { WaterPanel } from "./WaterPanel";
 import { WorkPanel } from "./WorkPanel";
 import { formatClock, formatInterval, MAX_REMINDER_AHEAD_MS } from "./time";
+import {
+  missedReminderNotice,
+  planRemindersAtLaunch,
+  type MissedReminderNotice,
+} from "./reminders";
 import { useWaterReminder } from "./useWaterReminder";
 import { useWorkLog } from "./useWorkLog";
 import { usePendingAction } from "./usePendingAction";
@@ -32,9 +37,11 @@ declare global {
       exitApp: () => void;
       scheduleReminder: (id: number, text: string, remindAt: number) => void;
       cancelReminder: (id: number) => void;
+      notifyMissedReminders: (notice: MissedReminderNotice) => void;
       onReminder: (callback: (id: number) => void) => () => void;
       setLoginItem: (openAtLogin: boolean) => boolean;
       isPackaged: boolean;
+      appStartedAt?: number;
     };
   }
 }
@@ -131,19 +138,40 @@ export default function App() {
 
   useEffect(() => {
     let active = true;
+    // Anything un-notified and due before this run was missed while the app
+    // was closed; timers only exist while the app is running. The main process
+    // supplies its start time so a renderer reload keeps the same boundary.
+    const launchedAt = window.desktopBuddy?.appStartedAt ?? Date.now();
     const loadReminders = async () => {
       const saved = await db.reminders.orderBy("remindAt").toArray();
-      if (active) {
-        setReminders(saved);
-        for (const reminder of saved) {
-          if (reminder.id !== undefined && !reminder.notified) {
-            window.desktopBuddy?.scheduleReminder(
-              reminder.id,
-              reminder.text,
-              reminder.remindAt,
-            );
-          }
+      if (!active) return;
+      setReminders(saved);
+
+      const { missed, pending } = planRemindersAtLaunch(saved, launchedAt);
+      if (missed.length > 0) {
+        try {
+          // Mark the backlog handled before showing it, so a reload cannot
+          // deliver the same missed reminders twice.
+          await db.reminders.bulkPut(
+            missed.map((reminder) => ({ ...reminder, notified: true })),
+          );
+          const notice = missedReminderNotice(missed);
+          if (notice) announceMissedReminders(notice);
+          if (!active) return;
+          setReminders(await db.reminders.orderBy("remindAt").toArray());
+        } catch (error) {
+          console.error("Could not catch up on missed reminders", error);
         }
+      }
+      if (!active) return;
+
+      for (const reminder of pending) {
+        if (reminder.id === undefined) continue;
+        window.desktopBuddy?.scheduleReminder(
+          reminder.id,
+          reminder.text,
+          reminder.remindAt,
+        );
       }
     };
     void loadReminders();
@@ -815,6 +843,10 @@ export default function App() {
                 value={reminderAt}
                 onChange={(event) => setReminderAt(event.target.value)}
               />
+              <p className="buddy-panel__hint">
+                Reminders only fire while Desktop Buddy is running. If I&apos;m
+                closed, missed ones arrive together next time you open me.
+              </p>
               {reminderError && (
                 <p className="buddy-panel__error">{reminderError}</p>
               )}
@@ -991,6 +1023,18 @@ function PetChoice({
       </span>
     </button>
   );
+}
+
+function announceMissedReminders(notice: MissedReminderNotice) {
+  if (window.desktopBuddy) {
+    window.desktopBuddy.notifyMissedReminders(notice);
+    return;
+  }
+  if ("Notification" in window && Notification.permission === "granted") {
+    new Notification(notice.title, { body: notice.body });
+  } else {
+    window.alert(`${notice.title}\n\n${notice.body}`);
+  }
 }
 
 function toDateTimeLocalValue(date: Date) {

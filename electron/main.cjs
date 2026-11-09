@@ -14,6 +14,10 @@ const { setClickThrough } = require("./click-through.cjs");
 
 const PET_WINDOW = { width: 360, height: 260 };
 const SETUP_WINDOW = { width: 460, height: 600 };
+// Reminders already past this instant were missed while the app was closed.
+// Kept separate from renderer load time so a reload cannot re-classify a
+// reminder that came due while the app was running.
+const appStartedAt = Date.now();
 
 let sleepTimer;
 let buddyWindow;
@@ -248,6 +252,10 @@ ipcMain.on("is-packaged", (event) => {
   event.returnValue = app.isPackaged;
 });
 
+ipcMain.on("app-started-at", (event) => {
+  event.returnValue = appStartedAt;
+});
+
 ipcMain.on("set-login-item", (event, openAtLogin) => {
   // login items only make sense for the installed app, not the dev runner
   if (!app.isPackaged) {
@@ -276,6 +284,21 @@ ipcMain.on("schedule-reminder", (event, id, text, remindAt) => {
 ipcMain.on("cancel-reminder", (_event, id) => {
   clearLongTimeout(reminderTimers.get(id));
   reminderTimers.delete(id);
+});
+
+ipcMain.on("notify-missed-reminders", (_event, notice) => {
+  if (
+    !notice ||
+    typeof notice.title !== "string" ||
+    typeof notice.body !== "string"
+  )
+    return;
+  try {
+    // one notification for the whole backlog, not one per missed reminder
+    new Notification({ title: notice.title, body: notice.body }).show();
+  } catch (error) {
+    console.error("Could not show missed reminders", error);
+  }
 });
 
 if (!app.requestSingleInstanceLock()) {
