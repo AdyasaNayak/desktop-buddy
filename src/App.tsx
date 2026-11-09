@@ -815,10 +815,11 @@ export default function App() {
             </button>
             <button
               type="button"
-              className="buddy-menu__button"
-              onClick={() => setMenuOpen(false)}
+              className="buddy-menu__button buddy-menu__button--exit"
+              title="Quit Desktop Buddy"
+              onClick={() => window.desktopBuddy?.exitApp()}
             >
-              Close
+              Quit
             </button>
           </div>
         )}

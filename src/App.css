@@ -504,6 +504,10 @@
   background: var(--sun-soft);
 }
 
+.buddy-menu__button--exit {
+  color: #8a3b2e;
+}
+
 .buddy-dialog {
   position: absolute;
   inset: 0;
