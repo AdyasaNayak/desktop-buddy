@@ -38,6 +38,8 @@ export interface WorkSession {
   endedAt?: number;
   durationMs: number;
   heartbeatAt: number;
+  /** Time excluded because the app was closed while the timer was running. */
+  pausedMs?: number;
 }
 
 class BuddyDB extends Dexie {

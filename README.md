@@ -54,6 +54,15 @@ and a desktop app cannot run code while it is closed.
 The scheduling and catch-up logic lives in `electron/main.cjs` and
 `src/reminders.ts`.
 
+## Work sessions and quitting
+
+A running work timer is saved locally. If Desktop Buddy quits or crashes while
+a timer is running, reopening it resumes that timer from its last heartbeat.
+Time spent with the app closed is paused, not added to the session, and the
+Work mode panel says when a timer was resumed after a restart. If an older
+version left duplicate timers open, the most recent one resumes and the extras
+are closed into the work log.
+
 ## Project layout
 
 - `electron/` — Electron main process, preload bridge, and timer helpers
