@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { db, type WaterPlan } from "./db";
 import { dayKey } from "./time";
-import { pickWaterMessage } from "./waterMessages";
+import { pickWaterMessage, waterNudgeNotice } from "./waterMessages";
 
 export interface WaterPrompt {
   message: string;
@@ -17,6 +17,24 @@ const DEFAULT_INTERVAL_MINUTES = 60;
 async function readTodayMl(date: string): Promise<number> {
   const entries = await db.water.where("date").equals(date).toArray();
   return entries.reduce((total, entry) => total + entry.amount, 0);
+}
+
+/**
+ * A hidden buddy draws its nudge bubble out of sight. The main process turns
+ * the notice into an OS notification when the window is hidden, so the nudge
+ * still reaches the user. In browser preview a hidden tab gets the same
+ * fallback through the browser's Notification API.
+ */
+function announceNudge(prompt: WaterPrompt) {
+  const notice = waterNudgeNotice(prompt);
+  if (window.desktopBuddy) {
+    window.desktopBuddy.notifyWaterReminder(notice);
+    return;
+  }
+  if (!document.hidden) return;
+  if ("Notification" in window && Notification.permission === "granted") {
+    new Notification(notice.title, { body: notice.body });
+  }
 }
 
 /**
@@ -75,7 +93,7 @@ export function useWaterReminder(
   }, [refreshTodayMl]);
 
   // The buddy can stay open for days, so refresh when the local day changes.
-  // Timers are paused while hidden or asleep, hence the focus checks too.
+  // A sleeping machine can stall the timer, hence the focus checks too.
   useEffect(() => {
     const checkDay = () => {
       if (dayKey() === loadedDay.current) return;
@@ -106,12 +124,22 @@ export function useWaterReminder(
         lastMessage.current,
       );
       lastMessage.current = message;
-      setPrompt({ message, amountMl: plan.amountMl, totalMl: todayMl });
+      const nudge = { message, amountMl: plan.amountMl, totalMl: todayMl };
+      setPrompt(nudge);
+      announceNudge(nudge);
     };
     check();
     const timer = window.setInterval(check, CHECK_MS);
     return () => window.clearInterval(timer);
   }, [ready, plan, prompt, todayMl, petName, yourName]);
+
+  // Hiding the buddy with a nudge still waiting takes its bubble off screen,
+  // so pass that pending nudge to the OS notification path too.
+  useEffect(() => {
+    const bridge = window.desktopBuddy;
+    if (!bridge || !prompt) return;
+    return bridge.onWindowHidden(() => announceNudge(prompt));
+  }, [prompt]);
 
   const scheduleNext = useCallback(
     async (minutes: number) => {

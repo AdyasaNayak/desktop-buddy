@@ -58,6 +58,15 @@ and a desktop app cannot run code while it is closed.
 The scheduling and catch-up logic lives in `electron/main.cjs` and
 `src/reminders.ts`.
 
+## Water breaks and hiding
+
+Water nudges are checked while Desktop Buddy is running, whether the buddy is
+on screen or hidden in the tray. A hidden window cannot show the nudge bubble,
+so the due nudge arrives as a desktop notification instead. Clicking the
+notification brings the buddy back so the glass can still be logged. A visible
+buddy keeps showing the nudge in its own bubble instead of a notification, so
+the two never appear at the same time.
+
 ## Work sessions and quitting
 
 A running work timer is saved locally. If Desktop Buddy quits or crashes while
