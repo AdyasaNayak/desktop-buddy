@@ -3,6 +3,29 @@ import type { Reminder, ReminderRepeat } from "./db";
 /** Reminders further out than this are almost always a typo. */
 export const MAX_REMINDER_AHEAD_MS = 365 * 24 * 60 * 60 * 1000;
 
+/** The time input only shows minutes, so keep its floor just ahead of now. */
+export const MIN_REMINDER_LEAD_MS = 60 * 1000;
+
+/**
+ * Input limits for `datetime-local` values, computed from the current time so
+ * a dialog that stays open does not keep a minimum that has already passed.
+ */
+export function reminderDateBounds(now: number): { min: string; max: string } {
+  return {
+    min: toDateTimeLocalValue(new Date(now + MIN_REMINDER_LEAD_MS)),
+    max: toDateTimeLocalValue(new Date(now + MAX_REMINDER_AHEAD_MS)),
+  };
+}
+
+/** Local "YYYY-MM-DDTHH:mm" value a datetime-local input expects. */
+export function toDateTimeLocalValue(date: Date): string {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return [
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
+    `${pad(date.getHours())}:${pad(date.getMinutes())}`,
+  ].join("T");
+}
+
 export interface ReminderDraft {
   text: string;
   remindAt: number;

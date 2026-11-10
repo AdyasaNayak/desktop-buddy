@@ -2,10 +2,13 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   FIRED_REMINDER_RETENTION_MS,
+  MAX_REMINDER_AHEAD_MS,
   MAX_REMINDER_TEXT_LENGTH,
+  MIN_REMINDER_LEAD_MS,
   missedReminderNotice,
   nextReminderTime,
   planRemindersAtLaunch,
+  reminderDateBounds,
   reminderDraftError,
   reminderRepeatLabel,
   reminderTextError,
@@ -194,6 +197,25 @@ test("repeat labels only appear for repeating reminders", () => {
   assert.equal(reminderRepeatLabel("none"), null);
   assert.equal(reminderRepeatLabel("daily"), "repeats every day");
   assert.equal(reminderRepeatLabel("weekly"), "repeats every week");
+});
+
+test("reminder date limits move with the current time", () => {
+  const now = new Date(2026, 5, 15, 12, 0, 30).getTime();
+  const first = reminderDateBounds(now);
+  const later = reminderDateBounds(now + 10 * 60_000);
+
+  const min = new Date(first.min).getTime();
+  assert.ok(min > now, "the minimum must be ahead of now");
+  assert.ok(min <= now + MIN_REMINDER_LEAD_MS);
+
+  const max = new Date(first.max).getTime();
+  assert.ok(max <= now + MAX_REMINDER_AHEAD_MS);
+  assert.ok(max > now + MAX_REMINDER_AHEAD_MS - 60_000);
+
+  assert.ok(
+    new Date(later.min).getTime() > min,
+    "a dialog left open must not keep an old minimum",
+  );
 });
 
 test("reminder drafts need text, a future time, and a bounded date", () => {

@@ -1,12 +1,13 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import type { Reminder, ReminderRepeat } from "./db";
 import {
-  MAX_REMINDER_AHEAD_MS,
   MAX_REMINDER_TEXT_LENGTH,
   REMINDER_REPEAT_OPTIONS,
+  reminderDateBounds,
   reminderDraftError,
   reminderRepeatLabel,
   sortRemindersForList,
+  toDateTimeLocalValue,
   toReminderRepeat,
   type ReminderDraft,
 } from "./reminders";
@@ -34,13 +35,23 @@ export function ReminderPanel({
   const [repeat, setRepeat] = useState<ReminderRepeat>("none");
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
-  const [bounds, setBounds] = useState(reminderDateBounds);
+  // The time field limits must follow the clock while the dialog stays open;
+  // limits captured once would soon point at times that have already passed.
+  const [bounds, setBounds] = useState(currentReminderDateBounds);
   const saveAction = usePendingAction();
   const rowAction = usePendingAction();
   const busy = saveAction.pending || rowAction.pending;
   const firedCount = reminders.filter((reminder) => reminder.notified).length;
 
-  const refreshBounds = () => setBounds(reminderDateBounds());
+  useEffect(() => {
+    const timer = window.setInterval(
+      () => setBounds(currentReminderDateBounds()),
+      30_000,
+    );
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const refreshBounds = () => setBounds(currentReminderDateBounds());
 
   const resetForm = () => {
     setEditingId(null);
@@ -303,18 +314,6 @@ function errorMessage(prefix: string, error: unknown): string {
   return `${prefix}: ${error instanceof Error ? error.message : String(error)}`;
 }
 
-function reminderDateBounds() {
-  const now = Date.now();
-  return {
-    min: toDateTimeLocalValue(new Date(now + 60_000)),
-    max: toDateTimeLocalValue(new Date(now + MAX_REMINDER_AHEAD_MS)),
-  };
-}
-
-function toDateTimeLocalValue(date: Date) {
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return [
-    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
-    `${pad(date.getHours())}:${pad(date.getMinutes())}`,
-  ].join("T");
+function currentReminderDateBounds() {
+  return reminderDateBounds(Date.now());
 }
