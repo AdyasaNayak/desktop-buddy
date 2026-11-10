@@ -15,6 +15,8 @@ export interface WaterEntry {
   ts: number;
 }
 
+export type ReminderRepeat = "none" | "daily" | "weekly";
+
 export interface Reminder {
   id?: number;
   text: string;
@@ -22,6 +24,8 @@ export interface Reminder {
   notified: boolean;
   /** When the reminder fired; missing on rows saved by older versions. */
   notifiedAt?: number;
+  /** How the reminder comes back after firing; missing means once. */
+  repeat?: ReminderRepeat;
 }
 
 /** The user's chosen schedule for water nudges. */

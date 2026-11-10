@@ -5,13 +5,16 @@ import { Onboarding, type OnboardingResult } from "./Onboarding";
 import { PetPreview } from "./PetPreview";
 import { WaterPanel } from "./WaterPanel";
 import { WorkPanel } from "./WorkPanel";
-import { formatClock, formatInterval, formatWhen, MAX_REMINDER_AHEAD_MS } from "./time";
+import { ReminderPanel } from "./ReminderPanel";
+import { formatClock, formatInterval } from "./time";
 import {
   missedReminderNotice,
+  nextReminderTime,
   planRemindersAtLaunch,
   selectExpiredFiredReminders,
-  sortRemindersForList,
+  toReminderRepeat,
   type MissedReminderNotice,
+  type ReminderDraft,
 } from "./reminders";
 import { useWaterReminder } from "./useWaterReminder";
 import { useWorkLog } from "./useWorkLog";
@@ -62,15 +65,6 @@ export default function App() {
   const [reminderOpen, setReminderOpen] = useState(false);
   const [sleepOpen, setSleepOpen] = useState(false);
   const [reminders, setReminders] = useState<Reminder[]>([]);
-  const [reminderText, setReminderText] = useState("");
-  const [reminderAt, setReminderAt] = useState("");
-  const [reminderError, setReminderError] = useState("");
-  const [minReminderAt] = useState(() =>
-    toDateTimeLocalValue(new Date(Date.now() + 60000)),
-  );
-  const [maxReminderAt] = useState(() =>
-    toDateTimeLocalValue(new Date(Date.now() + MAX_REMINDER_AHEAD_MS)),
-  );
   const [sleepMinutes, setSleepMinutes] = useState("15");
   // undefined = still loading, null = first run (show setup)
   const [profile, setProfile] = useState<Profile | null | undefined>(undefined);
@@ -80,8 +74,6 @@ export default function App() {
   const [welcome, setWelcome] = useState<string | null>(null);
   const [changingPet, setChangingPet] = useState(false);
   const waterAction = usePendingAction();
-  const reminderAction = usePendingAction();
-  const clearReminderAction = usePendingAction();
   const profileAction = usePendingAction();
   const petAction = usePendingAction();
   const positionRef = useRef<{ x: number; y: number } | null>(null);
@@ -187,90 +179,147 @@ export default function App() {
         (reminder) => reminder.id === undefined || !deleted.has(reminder.id),
       );
     };
-    const loadReminders = async () => {
+    const refreshReminders = async () => {
       const saved = await readReminders();
-      if (!active) return;
-      setReminders(saved);
+      if (active) setReminders(saved);
+      return saved;
+    };
+    const scheduleReminder = (reminder: Reminder) => {
+      if (reminder.id === undefined) return;
+      window.desktopBuddy?.scheduleReminder(
+        reminder.id,
+        reminder.text,
+        reminder.remindAt,
+      );
+    };
 
+    // A repeating reminder keeps one fired row for history and gets a fresh
+    // upcoming row. The transaction re-checks `notified` so a duplicate event
+    // cannot add the next occurrence twice.
+    const handleMissed = async (missed: Reminder[], handledAt: number) => {
+      const handled: Reminder[] = [];
+      const nextOccurrences: Reminder[] = [];
+      await db.transaction("rw", db.reminders, async () => {
+        for (const candidate of missed) {
+          if (candidate.id === undefined) continue;
+          const reminder = await db.reminders.get(candidate.id);
+          if (!reminder || reminder.notified) continue;
+          await db.reminders.update(candidate.id, {
+            notified: true,
+            notifiedAt: handledAt,
+          });
+          handled.push({ ...reminder, notified: true, notifiedAt: handledAt });
+
+          const nextAt = nextReminderTime(
+            reminder.remindAt,
+            reminder.repeat,
+            handledAt,
+          );
+          if (nextAt === null) continue;
+          const nextDraft: Reminder = {
+            text: reminder.text,
+            remindAt: nextAt,
+            notified: false,
+            repeat: toReminderRepeat(reminder.repeat),
+          };
+          const nextId = await db.reminders.add(nextDraft);
+          nextOccurrences.push({ ...nextDraft, id: nextId });
+        }
+      });
+      return { handled, nextOccurrences };
+    };
+
+    const markFired = async (id: number, firedAt: number) => {
+      let next: Reminder | null = null;
+      let changed = false;
+      await db.transaction("rw", db.reminders, async () => {
+        const reminder = await db.reminders.get(id);
+        if (!reminder || reminder.notified) return;
+        await db.reminders.update(id, { notified: true, notifiedAt: firedAt });
+        changed = true;
+
+        const nextAt = nextReminderTime(
+          reminder.remindAt,
+          reminder.repeat,
+          firedAt,
+        );
+        if (nextAt === null) return;
+        const nextDraft: Reminder = {
+          text: reminder.text,
+          remindAt: nextAt,
+          notified: false,
+          repeat: toReminderRepeat(reminder.repeat),
+        };
+        const nextId = await db.reminders.add(nextDraft);
+        next = { ...nextDraft, id: nextId };
+      });
+      if (next) scheduleReminder(next);
+      if (changed) await refreshReminders();
+    };
+
+    const startReminders = async () => {
+      const saved = await refreshReminders();
       const { missed, pending } = planRemindersAtLaunch(saved, launchedAt);
       if (missed.length > 0) {
         try {
           // Mark the backlog handled before showing it, so a reload cannot
           // deliver the same missed reminders twice.
-          const handledAt = Date.now();
-          await db.reminders.bulkPut(
-            missed.map((reminder) => ({
-              ...reminder,
-              notified: true,
-              notifiedAt: handledAt,
-            })),
+          const { handled, nextOccurrences } = await handleMissed(
+            missed,
+            Date.now(),
           );
-          const notice = missedReminderNotice(missed);
+          const notice = missedReminderNotice(handled);
           if (notice) announceMissedReminders(notice);
-          if (!active) return;
-          setReminders(await readReminders());
+          for (const reminder of nextOccurrences) scheduleReminder(reminder);
+          if (active) await refreshReminders();
         } catch (error) {
           console.error("Could not catch up on missed reminders", error);
         }
       }
       if (!active) return;
-
-      for (const reminder of pending) {
-        if (reminder.id === undefined) continue;
-        window.desktopBuddy?.scheduleReminder(
-          reminder.id,
-          reminder.text,
-          reminder.remindAt,
-        );
-      }
+      for (const reminder of pending) scheduleReminder(reminder);
     };
-    void loadReminders();
+    void startReminders();
 
     const unsubscribe = window.desktopBuddy?.onReminder((id) => {
-      void db.reminders
-        .update(id, { notified: true, notifiedAt: Date.now() })
-        .then(() => loadReminders())
-        .catch((error) => {
-          console.error("Could not mark reminder as fired", error);
-        });
+      void markFired(id, Date.now()).catch((error) => {
+        console.error("Could not mark reminder as fired", error);
+      });
     });
     const checkReminders = window.desktopBuddy
       ? undefined
       : window.setInterval(async () => {
-          const due = await db.reminders
-            .where("remindAt")
-            .belowOrEqual(Date.now())
-            .and((reminder) => !reminder.notified)
-            .toArray();
-          for (const reminder of due) {
-            if (
-              "Notification" in window &&
-              Notification.permission === "granted"
-            ) {
-              new Notification("Desktop Buddy reminder", {
-                body: reminder.text,
-              });
-            } else {
-              window.alert(`Reminder: ${reminder.text}`);
+          try {
+            const due = await db.reminders
+              .where("remindAt")
+              .belowOrEqual(Date.now())
+              .and((reminder) => !reminder.notified)
+              .toArray();
+            for (const reminder of due) {
+              if (reminder.id === undefined) continue;
+              if (
+                "Notification" in window &&
+                Notification.permission === "granted"
+              ) {
+                new Notification("Desktop Buddy reminder", {
+                  body: reminder.text,
+                });
+              } else {
+                window.alert(`Reminder: ${reminder.text}`);
+              }
+              await markFired(reminder.id, Date.now());
             }
-            await db.reminders.update(reminder.id!, {
-              notified: true,
-              notifiedAt: Date.now(),
-            });
+          } catch (error) {
+            console.error("Could not check reminders", error);
           }
-          if (due.length > 0) void loadReminders();
         }, 30000);
 
     // A long-running app still needs to remove fired reminders even when no
     // new reminder fires; hourly is precise enough for a week-long window.
     const cleanupReminders = window.setInterval(() => {
-      void readReminders()
-        .then((remaining) => {
-          if (active) setReminders(remaining);
-        })
-        .catch((error) => {
-          console.error("Could not clean up fired reminders", error);
-        });
+      void refreshReminders().catch((error) => {
+        console.error("Could not clean up fired reminders", error);
+      });
     }, 60 * 60 * 1000);
 
     return () => {
@@ -539,79 +588,120 @@ export default function App() {
     // positionRef keeps a switch from teleporting the pet
   }, [petReady, activePet, refreshClickThrough]);
 
-  const addReminder = () => {
-    const remindAt = new Date(reminderAt).getTime();
-    if (!reminderText.trim()) {
-      setReminderError("Enter a reminder message.");
-      return;
-    }
-    if (!Number.isFinite(remindAt) || remindAt <= Date.now()) {
-      setReminderError("Choose a future date and time.");
-      return;
-    }
-    if (remindAt > Date.now() + MAX_REMINDER_AHEAD_MS) {
-      setReminderError("Choose a date within a year from now.");
-      return;
-    }
-    return reminderAction.run(async () => {
-      setReminderError("");
-      try {
-        await db.open();
-        const id = await db.reminders.add({
-          text: reminderText.trim(),
-          remindAt,
+  const refreshReminderList = async () => {
+    setReminders(await db.reminders.orderBy("remindAt").toArray());
+  };
+
+  const scheduleSavedReminder = (reminder: Reminder) => {
+    if (reminder.id === undefined) return;
+    window.desktopBuddy?.scheduleReminder(
+      reminder.id,
+      reminder.text,
+      reminder.remindAt,
+    );
+  };
+
+  const saveReminder = async (draft: ReminderDraft, id?: number) => {
+    try {
+      await db.open();
+      const text = draft.text.trim();
+      const repeat = toReminderRepeat(draft.repeat);
+      let saved: Reminder;
+      if (id === undefined) {
+        const newId = await db.reminders.add({
+          text,
+          remindAt: draft.remindAt,
           notified: false,
+          repeat,
         });
-        const savedReminder = { id, text: reminderText.trim(), remindAt };
-        window.desktopBuddy?.scheduleReminder(
-          savedReminder.id,
-          savedReminder.text,
-          savedReminder.remindAt,
-        );
-        setReminders(await db.reminders.orderBy("remindAt").toArray());
-        if (
-          !window.desktopBuddy &&
-          "Notification" in window &&
-          Notification.permission === "default"
-        ) {
-          void Notification.requestPermission().catch(() => undefined);
+        saved = {
+          id: newId,
+          text,
+          remindAt: draft.remindAt,
+          notified: false,
+          repeat,
+        };
+      } else {
+        const existing = await db.reminders.get(id);
+        if (!existing) throw new Error("that reminder no longer exists.");
+        if (existing.notified) {
+          throw new Error("that reminder already fired; edit its next run instead.");
         }
-        setReminderText("");
-        setReminderAt("");
-        setReminderError("");
-        setReminderOpen(false);
-      } catch (error) {
-        console.error("Could not save reminder", error);
-        const message = error instanceof Error ? error.message : String(error);
-        setReminderError(`Could not save reminder: ${message}`);
+        saved = {
+          ...existing,
+          text,
+          remindAt: draft.remindAt,
+          repeat,
+          notified: false,
+          notifiedAt: undefined,
+        };
+        await db.reminders.put(saved);
       }
-    });
+
+      // scheduleReminder replaces the main-process timer for this id, so an
+      // edited time cannot leave the old timer waiting in the background.
+      scheduleSavedReminder(saved);
+      await refreshReminderList();
+      if (
+        !window.desktopBuddy &&
+        "Notification" in window &&
+        Notification.permission === "default"
+      ) {
+        void Notification.requestPermission().catch(() => undefined);
+      }
+    } catch (error) {
+      console.error("Could not save reminder", error);
+      throw error;
+    }
   };
 
   const removeReminder = async (id: number) => {
-    window.desktopBuddy?.cancelReminder(id);
-    await db.reminders.delete(id);
-    setReminders((current) => current.filter((reminder) => reminder.id !== id));
+    try {
+      window.desktopBuddy?.cancelReminder(id);
+      await db.reminders.delete(id);
+      await refreshReminderList();
+    } catch (error) {
+      console.error("Could not delete reminder", error);
+      throw error;
+    }
   };
 
-  const clearFiredReminders = () =>
-    clearReminderAction.run(async () => {
-      setReminderError("");
-      try {
-        const fired = await db.reminders
-          .filter((reminder) => reminder.notified)
-          .toArray();
-        const ids = fired
-          .map((reminder) => reminder.id)
-          .filter((id): id is number => id !== undefined);
-        if (ids.length > 0) await db.reminders.bulkDelete(ids);
-        setReminders(await db.reminders.orderBy("remindAt").toArray());
-      } catch (error) {
-        console.error("Could not clear fired reminders", error);
-        const message = error instanceof Error ? error.message : String(error);
-        setReminderError(`Could not clear fired reminders: ${message}`);
-      }
-    });
+  const snoozeReminder = async (reminder: Reminder) => {
+    if (reminder.id === undefined || !reminder.notified) return;
+    try {
+      // A repeating reminder already has its next occurrence scheduled. Turn
+      // the fired row into a one-off so snoozing cannot start a second series.
+      const snoozed: Reminder = {
+        ...reminder,
+        remindAt: Date.now() + 10 * 60 * 1000,
+        notified: false,
+        notifiedAt: undefined,
+        repeat: "none",
+      };
+      await db.reminders.put(snoozed);
+      scheduleSavedReminder(snoozed);
+      await refreshReminderList();
+    } catch (error) {
+      console.error("Could not snooze reminder", error);
+      throw error;
+    }
+  };
+
+  const clearFiredReminders = async () => {
+    try {
+      const fired = await db.reminders
+        .filter((reminder) => reminder.notified)
+        .toArray();
+      const ids = fired
+        .map((reminder) => reminder.id)
+        .filter((id): id is number => id !== undefined);
+      if (ids.length > 0) await db.reminders.bulkDelete(ids);
+      await refreshReminderList();
+    } catch (error) {
+      console.error("Could not clear fired reminders", error);
+      throw error;
+    }
+  };
 
   const showBubble = (message: string, ms = 6000) => {
     setWelcome(message);
@@ -774,10 +864,6 @@ export default function App() {
       />
     );
   }
-
-  const firedReminderCount = reminders.filter(
-    (reminder) => reminder.notified,
-  ).length;
 
   return (
     <div style={{ position: "relative", width: "100vw", height: "100vh" }}>
@@ -943,101 +1029,14 @@ export default function App() {
       </div>
 
       {reminderOpen && (
-        <div className="buddy-dialog">
-          <div
-            className="buddy-panel"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="reminder-dialog-title"
-          >
-            <h2 id="reminder-dialog-title" className="buddy-panel__title">
-              New reminder
-            </h2>
-            <form
-              className="buddy-panel__form"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void addReminder();
-              }}
-            >
-              <input
-                className="field__input"
-                autoFocus
-                aria-label="Reminder text"
-                placeholder="Remind me to…"
-                value={reminderText}
-                onChange={(event) => setReminderText(event.target.value)}
-              />
-              <input
-                className="field__input"
-                type="datetime-local"
-                aria-label="Reminder time"
-                min={minReminderAt}
-                max={maxReminderAt}
-                value={reminderAt}
-                onChange={(event) => setReminderAt(event.target.value)}
-              />
-              <p className="buddy-panel__hint">
-                Reminders only fire while Desktop Buddy is running. If I&apos;m
-                closed, missed ones arrive together next time you open me.
-                Fired reminders are tidied away after a week.
-              </p>
-              {reminderError && (
-                <p className="buddy-panel__error">{reminderError}</p>
-              )}
-              <div className="buddy-panel__row">
-                <button className="btn btn--primary" type="submit" disabled={reminderAction.pending}>
-                  {reminderAction.pending ? "Adding…" : "Add reminder"}
-                </button>
-                <button
-                  className="btn"
-                  type="button"
-                  onClick={() => setReminderOpen(false)}
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-            {reminders.length > 0 && (
-              <div className="reminder-list">
-                {sortRemindersForList(reminders).map((reminder) => (
-                  <div
-                    key={reminder.id}
-                    className={`reminder-row${reminder.notified ? " reminder-row--fired" : ""}`}
-                  >
-                    <span className="reminder-row__body">
-                      <span className="reminder-row__text">
-                        {reminder.text}
-                      </span>
-                      <span className="reminder-row__meta">
-                        {reminder.notified ? "fired" : "scheduled"}{" "}
-                        {formatWhen(reminder.remindAt)}
-                      </span>
-                    </span>
-                    <button
-                      type="button"
-                      className="reminder-row__delete"
-                      aria-label={`Delete reminder: ${reminder.text}`}
-                      onClick={() => void removeReminder(reminder.id!)}
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-            {firedReminderCount > 0 && (
-              <button
-                className="btn btn--ghost reminder-list__clear"
-                type="button"
-                disabled={clearReminderAction.pending}
-                onClick={() => void clearFiredReminders()}
-              >
-                Clear fired reminders
-              </button>
-            )}
-          </div>
-        </div>
+        <ReminderPanel
+          reminders={reminders}
+          onSave={saveReminder}
+          onDelete={removeReminder}
+          onSnooze={snoozeReminder}
+          onClearFired={clearFiredReminders}
+          onClose={() => setReminderOpen(false)}
+        />
       )}
 
       {sleepOpen && (
@@ -1200,12 +1199,4 @@ function announceMissedReminders(notice: MissedReminderNotice) {
   } else {
     window.alert(`${notice.title}\n\n${notice.body}`);
   }
-}
-
-function toDateTimeLocalValue(date: Date) {
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return [
-    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
-    `${pad(date.getHours())}:${pad(date.getMinutes())}`,
-  ].join("T");
 }

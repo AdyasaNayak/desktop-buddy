@@ -52,6 +52,12 @@ and a desktop app cannot run code while it is closed.
   "3 reminders came due while I was closed") instead of a burst of separate
   notifications. They are then marked as handled and will not fire again.
   Future reminders are rescheduled.
+- Reminders can be edited or rescheduled from the list, and can be set to
+  repeat every day or every week. A repeating reminder schedules its next run
+  automatically after it fires, so it never disappears after the first alert.
+- A fired reminder can be snoozed for 10 minutes from its **Snooze 10m**
+  button. Snoozing a repeating reminder adds a one-off repeat of that run
+  rather than changing the series.
 - Fired reminders stay in the list for a week so you can see what came due,
   then they are removed automatically. **Clear fired reminders** in the
   reminder panel removes them immediately.

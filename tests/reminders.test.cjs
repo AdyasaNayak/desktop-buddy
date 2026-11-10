@@ -2,10 +2,15 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   FIRED_REMINDER_RETENTION_MS,
+  MAX_REMINDER_TEXT_LENGTH,
   missedReminderNotice,
+  nextReminderTime,
   planRemindersAtLaunch,
+  reminderDraftError,
+  reminderRepeatLabel,
   selectExpiredFiredReminders,
   sortRemindersForList,
+  toReminderRepeat,
 } = require("../src/reminders.ts");
 
 test("reminders due before launch are missed; later ones stay pending", () => {
@@ -134,6 +139,101 @@ test("a recent firing keeps an old schedule from being pruned", () => {
   };
 
   assert.deepEqual(selectExpiredFiredReminders([reminder], now), []);
+});
+
+test("one-off reminders do not schedule another occurrence", () => {
+  assert.equal(nextReminderTime(1_000, "none", 1_000), null);
+  assert.equal(nextReminderTime(1_000, undefined, 1_000), null);
+});
+
+test("daily reminders advance to the next day at the same local time", () => {
+  const firedAt = new Date(2026, 0, 12, 9, 0).getTime();
+  const next = nextReminderTime(firedAt, "daily", firedAt);
+  const nextDate = new Date(next);
+
+  assert.equal(nextDate.getFullYear(), 2026);
+  assert.equal(nextDate.getMonth(), 0);
+  assert.equal(nextDate.getDate(), 13);
+  assert.equal(nextDate.getHours(), 9);
+  assert.equal(nextDate.getMinutes(), 0);
+});
+
+test("a repeating reminder skipped while the app was closed lands in the future", () => {
+  const scheduled = new Date(2026, 0, 12, 9, 0).getTime();
+  const reopened = new Date(2026, 0, 16, 15, 30).getTime();
+  const nextDate = new Date(nextReminderTime(scheduled, "daily", reopened));
+
+  assert.equal(nextDate.getDate(), 17);
+  assert.equal(nextDate.getHours(), 9);
+  assert.ok(nextDate.getTime() > reopened);
+});
+
+test("weekly reminders advance a calendar week", () => {
+  const scheduled = new Date(2026, 0, 12, 9, 0).getTime();
+  const nextDate = new Date(nextReminderTime(scheduled, "weekly", scheduled));
+
+  assert.equal(nextDate.getDate(), 19);
+  assert.equal(nextDate.getHours(), 9);
+});
+
+test("damaged dates cannot create an unusable next reminder", () => {
+  assert.equal(nextReminderTime(Number.NaN, "daily", 1_000), null);
+  assert.equal(nextReminderTime(8.64e15, "daily", 1_000), null);
+});
+
+test("repeat values from older or damaged rows fall back to once", () => {
+  assert.equal(toReminderRepeat("daily"), "daily");
+  assert.equal(toReminderRepeat("weekly"), "weekly");
+  assert.equal(toReminderRepeat(undefined), "none");
+  assert.equal(toReminderRepeat("monthly"), "none");
+});
+
+test("repeat labels only appear for repeating reminders", () => {
+  assert.equal(reminderRepeatLabel(undefined), null);
+  assert.equal(reminderRepeatLabel("none"), null);
+  assert.equal(reminderRepeatLabel("daily"), "repeats every day");
+  assert.equal(reminderRepeatLabel("weekly"), "repeats every week");
+});
+
+test("reminder drafts need text, a future time, and a bounded date", () => {
+  const now = 1_000_000;
+  assert.equal(
+    reminderDraftError({ text: "  ", remindAt: now + 1000, repeat: "none" }, now),
+    "Enter a reminder message.",
+  );
+  assert.equal(
+    reminderDraftError({ text: "stretch", remindAt: now, repeat: "none" }, now),
+    "Choose a future date and time.",
+  );
+  assert.equal(
+    reminderDraftError(
+      { text: "stretch", remindAt: now + 400 * 24 * 60 * 60 * 1000, repeat: "none" },
+      now,
+    ),
+    "Choose a date within a year from now.",
+  );
+  assert.equal(
+    reminderDraftError(
+      { text: "stretch", remindAt: now + 60_000, repeat: "daily" },
+      now,
+    ),
+    null,
+  );
+});
+
+test("overlong reminder text is rejected instead of being stored", () => {
+  const now = 1_000_000;
+  assert.equal(
+    reminderDraftError(
+      {
+        text: "x".repeat(MAX_REMINDER_TEXT_LENGTH + 1),
+        remindAt: now + 60_000,
+        repeat: "none",
+      },
+      now,
+    ),
+    `Keep the reminder under ${MAX_REMINDER_TEXT_LENGTH} characters.`,
+  );
 });
 
 test("fired reminders from older versions fall back to their schedule", () => {
