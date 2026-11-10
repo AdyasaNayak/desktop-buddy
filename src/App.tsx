@@ -13,6 +13,7 @@ import {
 } from "./reminders";
 import { useWaterReminder } from "./useWaterReminder";
 import { useWorkLog } from "./useWorkLog";
+import type { WaterNudgeNotice } from "./waterMessages";
 import { usePendingAction } from "./usePendingAction";
 import { useClickThrough } from "./useClickThrough";
 import type { Rect } from "./clickThrough";
@@ -38,6 +39,7 @@ declare global {
       scheduleReminder: (id: number, text: string, remindAt: number) => void;
       cancelReminder: (id: number) => void;
       notifyMissedReminders: (notice: MissedReminderNotice) => void;
+      notifyWaterReminder: (notice: WaterNudgeNotice) => void;
       onReminder: (callback: (id: number) => void) => () => void;
       onWindowHidden: (callback: () => void) => () => void;
       setLoginItem: (openAtLogin: boolean) => boolean;

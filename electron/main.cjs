@@ -12,6 +12,7 @@ const path = require("node:path");
 const { setLongTimeout, clearLongTimeout } = require("./long-timer.cjs");
 const { setClickThrough } = require("./click-through.cjs");
 const { hideBuddy: hideBuddyWindow } = require("./hide-buddy.cjs");
+const { notifyHiddenWaterNudge } = require("./water-reminder.cjs");
 const { notifyWindowHidden } = require("./window-visibility.cjs");
 const {
   clampToArea,
@@ -203,6 +204,9 @@ function createWindow() {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
+      // Water nudges are checked by a timer in the renderer. A buddy hidden in
+      // the tray still needs that timer to run on schedule.
+      backgroundThrottling: false,
     },
   });
 
@@ -361,6 +365,26 @@ ipcMain.on("schedule-reminder", (event, id, text, remindAt) => {
 ipcMain.on("cancel-reminder", (_event, id) => {
   clearLongTimeout(reminderTimers.get(id));
   reminderTimers.delete(id);
+});
+
+ipcMain.on("notify-water-reminder", (event, notice) => {
+  const window = BrowserWindow.fromWebContents(event.sender);
+  notifyHiddenWaterNudge({
+    window,
+    notice,
+    show: ({ title, body, onClick }) => {
+      try {
+        const notification = new Notification({ title, body });
+        notification.on("click", onClick);
+        notification.show();
+        return true;
+      } catch (error) {
+        console.error("Could not show the water reminder", error);
+        return false;
+      }
+    },
+    showBuddy,
+  });
 });
 
 ipcMain.on("notify-missed-reminders", (_event, notice) => {

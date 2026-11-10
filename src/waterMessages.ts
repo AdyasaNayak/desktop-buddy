@@ -23,6 +23,23 @@ const WATER_MESSAGES: WaterMessage[] = [
   ({ petName }) => `${petName} says: drink up, champion.`,
 ];
 
+export interface WaterNudgeNotice {
+  title: string;
+  body: string;
+}
+
+/** The same nudge as an OS notification, for when the buddy is hidden. */
+export function waterNudgeNotice(prompt: {
+  message: string;
+  amountMl: number;
+  totalMl: number;
+}): WaterNudgeNotice {
+  return {
+    title: "Desktop Buddy water break",
+    body: `${prompt.message}\n${prompt.amountMl} ml now · ${prompt.totalMl} ml today`,
+  };
+}
+
 /** Pick a fresh nudge, avoiding an immediate repeat. */
 export function pickWaterMessage(
   context: WaterMessageContext,
