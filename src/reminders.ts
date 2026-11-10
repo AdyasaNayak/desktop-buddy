@@ -1,4 +1,80 @@
-import type { Reminder } from "./db";
+import type { Reminder, ReminderRepeat } from "./db";
+
+/** Reminders further out than this are almost always a typo. */
+export const MAX_REMINDER_AHEAD_MS = 365 * 24 * 60 * 60 * 1000;
+
+export interface ReminderDraft {
+  text: string;
+  remindAt: number;
+  repeat: ReminderRepeat;
+}
+
+export const MAX_REMINDER_TEXT_LENGTH = 200;
+
+export const REMINDER_REPEAT_OPTIONS: {
+  value: ReminderRepeat;
+  label: string;
+}[] = [
+  { value: "none", label: "Once" },
+  { value: "daily", label: "Every day" },
+  { value: "weekly", label: "Every week" },
+];
+
+/** Rows saved before repeats existed have no value, which means once. */
+export function toReminderRepeat(repeat: unknown): ReminderRepeat {
+  return repeat === "daily" || repeat === "weekly" ? repeat : "none";
+}
+
+/**
+ * The next occurrence after a reminder fires. Local calendar days are added
+ * so a 9am daily reminder stays at 9am across daylight-saving changes.
+ */
+export function nextReminderTime(
+  remindAt: number,
+  repeat: ReminderRepeat | undefined,
+  after: number,
+): number | null {
+  const interval = toReminderRepeat(repeat);
+  if (interval === "none") return null;
+  if (!Number.isFinite(remindAt) || !Number.isFinite(after)) return null;
+
+  const stepDays = interval === "weekly" ? 7 : 1;
+  const next = new Date(remindAt);
+  if (!Number.isFinite(next.getTime())) return null;
+  do {
+    next.setDate(next.getDate() + stepDays);
+  } while (next.getTime() <= after);
+  const nextTime = next.getTime();
+  return Number.isFinite(nextTime) ? nextTime : null;
+}
+
+/** Short list metadata such as "repeats every day". */
+export function reminderRepeatLabel(
+  repeat: ReminderRepeat | undefined,
+): string | null {
+  const interval = toReminderRepeat(repeat);
+  if (interval === "none") return null;
+  return interval === "weekly" ? "repeats every week" : "repeats every day";
+}
+
+/** Shared form validation so add and edit behave the same way. */
+export function reminderDraftError(
+  draft: ReminderDraft,
+  now: number,
+): string | null {
+  const text = draft.text.trim();
+  if (!text) return "Enter a reminder message.";
+  if (text.length > MAX_REMINDER_TEXT_LENGTH) {
+    return `Keep the reminder under ${MAX_REMINDER_TEXT_LENGTH} characters.`;
+  }
+  if (!Number.isFinite(draft.remindAt) || draft.remindAt <= now) {
+    return "Choose a future date and time.";
+  }
+  if (draft.remindAt > now + MAX_REMINDER_AHEAD_MS) {
+    return "Choose a date within a year from now.";
+  }
+  return null;
+}
 
 export interface MissedReminderNotice {
   title: string;

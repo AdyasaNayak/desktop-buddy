@@ -847,6 +847,29 @@
   justify-self: start;
 }
 
+.reminder-row__actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.reminder-row__action {
+  padding: 1px 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--leaf-deep);
+  font: 700 9.5px/1.5 var(--font-body);
+  cursor: pointer;
+}
+
+.reminder-row__action:hover {
+  border-color: var(--bark-soft);
+  background: var(--sun-soft);
+  color: var(--bark);
+}
+
 .reminder-row__delete {
   flex: none;
   padding: 1px 6px;
@@ -861,6 +884,12 @@
 .reminder-row__delete:hover {
   background: var(--sun-soft);
   color: var(--bark);
+}
+
+.reminder-row__action:disabled,
+.reminder-row__delete:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 @media (prefers-reduced-motion: reduce) {
