@@ -40,6 +40,31 @@ export function sortRemindersForList(reminders: Reminder[]): Reminder[] {
   ];
 }
 
+/**
+ * Fired reminders stay in the list long enough to see what happened, then are
+ * cleaned up so the database does not grow without limit.
+ */
+export const FIRED_REMINDER_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Older rows did not record when a reminder fired, so their scheduled time is
+ * the best available fallback. A reminder can only fire after its schedule.
+ */
+export function firedAt(reminder: Reminder): number {
+  return reminder.notifiedAt ?? reminder.remindAt;
+}
+
+/** Fired reminders that are past the retention window and can be deleted. */
+export function selectExpiredFiredReminders(
+  reminders: Reminder[],
+  now: number,
+): Reminder[] {
+  const cutoff = now - FIRED_REMINDER_RETENTION_MS;
+  return reminders.filter(
+    (reminder) => reminder.notified && firedAt(reminder) <= cutoff,
+  );
+}
+
 /** Notification bodies stay readable when a long backlog came due. */
 const MAX_LISTED = 3;
 

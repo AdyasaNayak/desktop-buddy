@@ -52,6 +52,9 @@ and a desktop app cannot run code while it is closed.
   "3 reminders came due while I was closed") instead of a burst of separate
   notifications. They are then marked as handled and will not fire again.
   Future reminders are rescheduled.
+- Fired reminders stay in the list for a week so you can see what came due,
+  then they are removed automatically. **Clear fired reminders** in the
+  reminder panel removes them immediately.
 - Choosing **Start with Windows** during setup keeps the buddy running after a
   reboot, so future reminders can still fire.
 

@@ -9,6 +9,7 @@ import { formatClock, formatInterval, formatWhen, MAX_REMINDER_AHEAD_MS } from "
 import {
   missedReminderNotice,
   planRemindersAtLaunch,
+  selectExpiredFiredReminders,
   sortRemindersForList,
   type MissedReminderNotice,
 } from "./reminders";
@@ -80,6 +81,7 @@ export default function App() {
   const [changingPet, setChangingPet] = useState(false);
   const waterAction = usePendingAction();
   const reminderAction = usePendingAction();
+  const clearReminderAction = usePendingAction();
   const profileAction = usePendingAction();
   const petAction = usePendingAction();
   const positionRef = useRef<{ x: number; y: number } | null>(null);
@@ -163,8 +165,30 @@ export default function App() {
     // was closed; timers only exist while the app is running. The main process
     // supplies its start time so a renderer reload keeps the same boundary.
     const launchedAt = window.desktopBuddy?.appStartedAt ?? Date.now();
-    const loadReminders = async () => {
+    // Fired reminders are visible for a while, then removed so the database
+    // does not keep growing. Deleting them here also cleans up rows left by
+    // older versions that did not record when a reminder fired.
+    const readReminders = async () => {
       const saved = await db.reminders.orderBy("remindAt").toArray();
+      const expired = selectExpiredFiredReminders(saved, Date.now());
+      const expiredIds = expired
+        .map((reminder) => reminder.id)
+        .filter((id): id is number => id !== undefined);
+      if (expiredIds.length === 0) return saved;
+
+      try {
+        await db.reminders.bulkDelete(expiredIds);
+      } catch (error) {
+        console.error("Could not clean up fired reminders", error);
+        return saved;
+      }
+      const deleted = new Set(expiredIds);
+      return saved.filter(
+        (reminder) => reminder.id === undefined || !deleted.has(reminder.id),
+      );
+    };
+    const loadReminders = async () => {
+      const saved = await readReminders();
       if (!active) return;
       setReminders(saved);
 
@@ -173,13 +197,18 @@ export default function App() {
         try {
           // Mark the backlog handled before showing it, so a reload cannot
           // deliver the same missed reminders twice.
+          const handledAt = Date.now();
           await db.reminders.bulkPut(
-            missed.map((reminder) => ({ ...reminder, notified: true })),
+            missed.map((reminder) => ({
+              ...reminder,
+              notified: true,
+              notifiedAt: handledAt,
+            })),
           );
           const notice = missedReminderNotice(missed);
           if (notice) announceMissedReminders(notice);
           if (!active) return;
-          setReminders(await db.reminders.orderBy("remindAt").toArray());
+          setReminders(await readReminders());
         } catch (error) {
           console.error("Could not catch up on missed reminders", error);
         }
@@ -199,8 +228,11 @@ export default function App() {
 
     const unsubscribe = window.desktopBuddy?.onReminder((id) => {
       void db.reminders
-        .update(id, { notified: true })
-        .then(() => loadReminders());
+        .update(id, { notified: true, notifiedAt: Date.now() })
+        .then(() => loadReminders())
+        .catch((error) => {
+          console.error("Could not mark reminder as fired", error);
+        });
     });
     const checkReminders = window.desktopBuddy
       ? undefined
@@ -221,14 +253,30 @@ export default function App() {
             } else {
               window.alert(`Reminder: ${reminder.text}`);
             }
-            await db.reminders.update(reminder.id!, { notified: true });
+            await db.reminders.update(reminder.id!, {
+              notified: true,
+              notifiedAt: Date.now(),
+            });
           }
           if (due.length > 0) void loadReminders();
         }, 30000);
 
+    // A long-running app still needs to remove fired reminders even when no
+    // new reminder fires; hourly is precise enough for a week-long window.
+    const cleanupReminders = window.setInterval(() => {
+      void readReminders()
+        .then((remaining) => {
+          if (active) setReminders(remaining);
+        })
+        .catch((error) => {
+          console.error("Could not clean up fired reminders", error);
+        });
+    }, 60 * 60 * 1000);
+
     return () => {
       active = false;
       if (checkReminders) window.clearInterval(checkReminders);
+      window.clearInterval(cleanupReminders);
       unsubscribe?.();
     };
   }, []);
@@ -546,6 +594,25 @@ export default function App() {
     setReminders((current) => current.filter((reminder) => reminder.id !== id));
   };
 
+  const clearFiredReminders = () =>
+    clearReminderAction.run(async () => {
+      setReminderError("");
+      try {
+        const fired = await db.reminders
+          .filter((reminder) => reminder.notified)
+          .toArray();
+        const ids = fired
+          .map((reminder) => reminder.id)
+          .filter((id): id is number => id !== undefined);
+        if (ids.length > 0) await db.reminders.bulkDelete(ids);
+        setReminders(await db.reminders.orderBy("remindAt").toArray());
+      } catch (error) {
+        console.error("Could not clear fired reminders", error);
+        const message = error instanceof Error ? error.message : String(error);
+        setReminderError(`Could not clear fired reminders: ${message}`);
+      }
+    });
+
   const showBubble = (message: string, ms = 6000) => {
     setWelcome(message);
     if (welcomeTimer.current !== null)
@@ -707,6 +774,10 @@ export default function App() {
       />
     );
   }
+
+  const firedReminderCount = reminders.filter(
+    (reminder) => reminder.notified,
+  ).length;
 
   return (
     <div style={{ position: "relative", width: "100vw", height: "100vh" }}>
@@ -909,6 +980,7 @@ export default function App() {
               <p className="buddy-panel__hint">
                 Reminders only fire while Desktop Buddy is running. If I&apos;m
                 closed, missed ones arrive together next time you open me.
+                Fired reminders are tidied away after a week.
               </p>
               {reminderError && (
                 <p className="buddy-panel__error">{reminderError}</p>
@@ -953,6 +1025,16 @@ export default function App() {
                   </div>
                 ))}
               </div>
+            )}
+            {firedReminderCount > 0 && (
+              <button
+                className="btn btn--ghost reminder-list__clear"
+                type="button"
+                disabled={clearReminderAction.pending}
+                onClick={() => void clearFiredReminders()}
+              >
+                Clear fired reminders
+              </button>
             )}
           </div>
         </div>

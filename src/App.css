@@ -843,6 +843,10 @@
   color: var(--bark-soft);
 }
 
+.reminder-list__clear {
+  justify-self: start;
+}
+
 .reminder-row__delete {
   flex: none;
   padding: 1px 6px;

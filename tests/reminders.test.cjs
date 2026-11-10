@@ -1,8 +1,10 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
+  FIRED_REMINDER_RETENTION_MS,
   missedReminderNotice,
   planRemindersAtLaunch,
+  selectExpiredFiredReminders,
   sortRemindersForList,
 } = require("../src/reminders.ts");
 
@@ -93,4 +95,55 @@ test("fired reminders move below upcoming ones without being hidden", () => {
     [2, 4, 1, 3],
   );
   assert.equal(reminders.map((reminder) => reminder.id).join(","), "1,2,3,4");
+});
+
+test("fired reminders are cleaned up once the retention window passes", () => {
+  const now = 10 * FIRED_REMINDER_RETENTION_MS;
+  const reminders = [
+    { id: 1, text: "upcoming", remindAt: now + 1, notified: false },
+    {
+      id: 2,
+      text: "fired recently",
+      remindAt: now - 1000,
+      notified: true,
+      notifiedAt: now - 1000,
+    },
+    {
+      id: 3,
+      text: "fired long ago",
+      remindAt: now - 2 * FIRED_REMINDER_RETENTION_MS,
+      notified: true,
+      notifiedAt: now - 2 * FIRED_REMINDER_RETENTION_MS,
+    },
+  ];
+
+  assert.deepEqual(
+    selectExpiredFiredReminders(reminders, now).map((reminder) => reminder.id),
+    [3],
+  );
+});
+
+test("a recent firing keeps an old schedule from being pruned", () => {
+  const now = 10 * FIRED_REMINDER_RETENTION_MS;
+  const reminder = {
+    id: 1,
+    text: "missed while the app was closed",
+    remindAt: now - 2 * FIRED_REMINDER_RETENTION_MS,
+    notified: true,
+    notifiedAt: now - 1000,
+  };
+
+  assert.deepEqual(selectExpiredFiredReminders([reminder], now), []);
+});
+
+test("fired reminders from older versions fall back to their schedule", () => {
+  const now = 10 * FIRED_REMINDER_RETENTION_MS;
+  const reminder = {
+    id: 1,
+    text: "old fired row",
+    remindAt: now - 2 * FIRED_REMINDER_RETENTION_MS,
+    notified: true,
+  };
+
+  assert.deepEqual(selectExpiredFiredReminders([reminder], now), [reminder]);
 });

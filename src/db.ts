@@ -20,6 +20,8 @@ export interface Reminder {
   text: string;
   remindAt: number;
   notified: boolean;
+  /** When the reminder fired; missing on rows saved by older versions. */
+  notifiedAt?: number;
 }
 
 /** The user's chosen schedule for water nudges. */
