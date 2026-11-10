@@ -44,6 +44,9 @@ and a desktop app cannot run code while it is closed.
   Use **Hide buddy** (or the tray icon) to get it off the screen without
   quitting. To quit completely, choose **Quit** in the buddy's menu or the
   tray menu.
+- If the system tray is unavailable and Desktop Buddy cannot show a
+  notification explaining how to bring the buddy back, it stays on screen
+  instead of hiding with no way to restore it.
 - When you reopen the app after one or more reminder times have passed, the
   overdue reminders arrive as **one combined notification** (for example,
   "3 reminders came due while I was closed") instead of a burst of separate
