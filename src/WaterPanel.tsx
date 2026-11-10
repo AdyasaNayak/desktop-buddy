@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import type { WaterPlan } from "./db";
 import { formatDuration, formatInterval } from "./time";
 import { usePendingAction } from "./usePendingAction";
@@ -12,10 +12,29 @@ const AMOUNT_OPTIONS = [
 
 const INTERVAL_OPTIONS = [15, 30, 45, 60, 90, 120];
 
-function nextBreakLabel(plan: WaterPlan): string {
-  const wait = Math.max(0, plan.nextReminderAt - Date.now());
+function nextBreakLabel(nextReminderAt: number, now: number): string {
+  const wait = Math.max(0, nextReminderAt - now);
   if (wait < 60_000) return "a nudge is due now";
   return `next nudge in about ${formatDuration(wait)}`;
+}
+
+/**
+ * The wait shrinks while the panel sits open, so this line keeps its own
+ * clock instead of relying on the rest of the panel to re-render.
+ */
+function NextNudge({ nextReminderAt }: { nextReminderAt: number }) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  return (
+    <p className="water-status__next">
+      {nextBreakLabel(nextReminderAt, now)}
+    </p>
+  );
 }
 
 export function WaterPanel({
@@ -107,7 +126,7 @@ export function WaterPanel({
               <p className="water-status__total">
                 <strong>{todayMl} ml</strong> today
               </p>
-              <p className="water-status__next">{nextBreakLabel(plan)}</p>
+              <NextNudge nextReminderAt={plan.nextReminderAt} />
             </div>
 
             {note && <p className="buddy-panel__note">{note}</p>}
