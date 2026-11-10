@@ -32,7 +32,7 @@ declare global {
       setWindowMode: (mode: "setup" | "pet") => void;
       moveWindow: (x: number, y: number) => void;
       sleepWindow: (duration: number) => void;
-      hideApp: () => void;
+      hideApp: () => Promise<boolean>;
       setClickThrough: (ignore: boolean) => void;
       exitApp: () => void;
       scheduleReminder: (id: number, text: string, remindAt: number) => void;
@@ -70,6 +70,7 @@ export default function App() {
   // undefined = still loading, null = first run (show setup)
   const [profile, setProfile] = useState<Profile | null | undefined>(undefined);
   const [profileError, setProfileError] = useState("");
+  const [hideError, setHideError] = useState("");
   const [renaming, setRenaming] = useState(false);
   const [welcome, setWelcome] = useState<string | null>(null);
   const [changingPet, setChangingPet] = useState(false);
@@ -358,7 +359,11 @@ export default function App() {
       if (canvas.hasPointerCapture(e.pointerId)) {
         canvas.releasePointerCapture(e.pointerId);
       }
-      if (!dragMoved) setMenuOpen((open) => !open);
+      if (!dragMoved) {
+        // a stale hide error should not greet the next menu opening
+        setHideError("");
+        setMenuOpen((open) => !open);
+      }
       canvas.style.cursor = isHovering ? "pointer" : "default";
       stateTimer = 0;
     };
@@ -527,6 +532,21 @@ export default function App() {
     if (welcomeTimer.current !== null)
       window.clearTimeout(welcomeTimer.current);
     welcomeTimer.current = window.setTimeout(() => setWelcome(null), ms);
+  };
+
+  // A failed hide leaves the buddy on screen instead of stranding the app, so
+  // say why rather than making the button look broken.
+  const hideBuddy = () => {
+    const bridge = window.desktopBuddy;
+    if (!bridge) return;
+    setHideError("");
+    const explain = () =>
+      setHideError(
+        "Could not hide the buddy: the system tray is unavailable. Use Quit to close the app.",
+      );
+    void bridge.hideApp().then((hidden) => {
+      if (!hidden) explain();
+    }, explain);
   };
 
   const announce = (pet: PetType, name: string, humanName: string) => {
@@ -743,6 +763,11 @@ export default function App() {
       >
         {menuOpen && (
           <div className="buddy-menu">
+            {hideError && (
+              <p className="buddy-menu__error" role="alert">
+                {hideError}
+              </p>
+            )}
             <button
               type="button"
               className="buddy-menu__button"
@@ -809,7 +834,7 @@ export default function App() {
               type="button"
               className="buddy-menu__button"
               title="Hide in the system tray. Click the tray icon to bring me back."
-              onClick={() => window.desktopBuddy?.hideApp()}
+              onClick={hideBuddy}
             >
               Hide buddy
             </button>

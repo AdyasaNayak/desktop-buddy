@@ -508,6 +508,15 @@
   color: #8a3b2e;
 }
 
+.buddy-menu__error {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 0 2px;
+  color: #a33c2c;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 .buddy-dialog {
   position: absolute;
   inset: 0;

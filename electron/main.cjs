@@ -11,6 +11,7 @@ const {
 const path = require("node:path");
 const { setLongTimeout, clearLongTimeout } = require("./long-timer.cjs");
 const { setClickThrough } = require("./click-through.cjs");
+const { hideBuddy: hideBuddyWindow } = require("./hide-buddy.cjs");
 const {
   clampToArea,
   readWindowPosition,
@@ -109,23 +110,37 @@ function showBuddy() {
   buddyWindow.focus();
 }
 
-function hideBuddy(window = buddyWindow) {
-  if (!window || window.isDestroyed()) return;
-  window.hide();
-
-  if (trayHintShown) return;
-  trayHintShown = true;
-  if (!Notification.isSupported()) return;
+function showTrayHint(hasTray) {
+  if (!Notification.isSupported()) return false;
   try {
     new Notification({
       title: "Desktop Buddy is still running",
-      body: tray
+      body: hasTray
         ? "Click the tray icon, or open Desktop Buddy again, to bring your buddy back."
         : "Open Desktop Buddy again to bring your buddy back.",
     }).show();
+    return true;
   } catch (error) {
     console.error("Could not show the tray hint", error);
+    return false;
   }
+}
+
+// Returns true when the buddy ended up hidden. Without a tray and without a
+// notification explaining how to restore it, the window stays on screen.
+function hideBuddy(window = buddyWindow) {
+  // a tray that failed at launch is retried here, before deciding that there
+  // is no reliable way back
+  if (!tray) createTray();
+
+  const result = hideBuddyWindow({
+    window,
+    hasTray: Boolean(tray),
+    hintShown: trayHintShown,
+    showHint: () => showTrayHint(Boolean(tray)),
+  });
+  trayHintShown = result.hintShown;
+  return result.hidden;
 }
 
 function updateTrayMenu() {
@@ -256,9 +271,9 @@ ipcMain.on("sleep-window", (event, duration) => {
   }, Math.max(1000, duration));
 });
 
-ipcMain.on("hide-app", (event) => {
+ipcMain.handle("hide-app", (event) => {
   const window = BrowserWindow.fromWebContents(event.sender);
-  if (window) hideBuddy(window);
+  return window ? hideBuddy(window) : false;
 });
 
 ipcMain.on("set-click-through", (event, ignore) => {
