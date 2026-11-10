@@ -20,4 +20,9 @@ contextBridge.exposeInMainWorld("desktopBuddy", {
     ipcRenderer.on("reminder-fired", listener);
     return () => ipcRenderer.removeListener("reminder-fired", listener);
   },
+  onWindowHidden: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on("window-hidden", listener);
+    return () => ipcRenderer.removeListener("window-hidden", listener);
+  },
 });
