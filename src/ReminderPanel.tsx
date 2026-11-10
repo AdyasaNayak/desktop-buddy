@@ -237,7 +237,7 @@ export function ReminderPanel({
                   className={`reminder-row${reminder.notified ? " reminder-row--fired" : ""}`}
                 >
                   <span className="reminder-row__body">
-                    <span className="reminder-row__text">
+                    <span className="reminder-row__text" title={reminder.text}>
                       {reminder.text}
                     </span>
                     <span className="reminder-row__meta">
