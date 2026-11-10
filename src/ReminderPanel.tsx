@@ -53,6 +53,8 @@ export function ReminderPanel({
 
   const refreshBounds = () => setBounds(currentReminderDateBounds());
 
+  // The panel is unmounted when it closes today, but cancel and save reset
+  // explicitly so stale text, date, repeat, or errors never rely on that.
   const resetForm = () => {
     setEditingId(null);
     setText("");
@@ -61,6 +63,11 @@ export function ReminderPanel({
     setError("");
     setNote("");
     refreshBounds();
+  };
+
+  const cancelNewReminder = () => {
+    resetForm();
+    onClose();
   };
 
   const startEdit = (reminder: Reminder) => {
@@ -93,11 +100,11 @@ export function ReminderPanel({
       setNote("");
       try {
         await onSave(draft, submittedId ?? undefined);
+        resetForm();
         if (submittedId === null) {
           onClose();
           return;
         }
-        resetForm();
         setNote("Reminder updated.");
       } catch (caught) {
         setError(errorMessage("Could not save reminder", caught));
@@ -222,7 +229,7 @@ export function ReminderPanel({
                 className="btn"
                 type="button"
                 disabled={busy}
-                onClick={onClose}
+                onClick={cancelNewReminder}
               >
                 Cancel
               </button>
