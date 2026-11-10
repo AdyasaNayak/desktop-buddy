@@ -17,16 +17,40 @@ const {
   toReminderRepeat,
 } = require("../src/reminders.ts");
 
-test("reminders due before launch are missed; later ones stay pending", () => {
-  const launchedAt = 1_000_000;
+test("reminders due when timers are restored are missed; later ones stay pending", () => {
+  const restoredAt = 1_000_000;
   const { missed, pending } = planRemindersAtLaunch(
     [
-      { id: 1, text: "already due", remindAt: launchedAt - 60_000, notified: false },
-      { id: 2, text: "due right at launch", remindAt: launchedAt, notified: false },
-      { id: 3, text: "still ahead", remindAt: launchedAt + 60_000, notified: false },
+      { id: 1, text: "already due", remindAt: restoredAt - 60_000, notified: false },
+      { id: 2, text: "due right now", remindAt: restoredAt, notified: false },
+      { id: 3, text: "still ahead", remindAt: restoredAt + 60_000, notified: false },
     ],
-    launchedAt,
+    restoredAt,
   );
+
+  assert.deepEqual(
+    missed.map((reminder) => reminder.id),
+    [1, 2],
+  );
+  assert.deepEqual(
+    pending.map((reminder) => reminder.id),
+    [3],
+  );
+});
+
+test("reminders due between process start and timer restore are missed, not zero-delay", () => {
+  // The window can be reopened or reloaded long after the process started.
+  // Comparing against process start would put these in `pending`, where the
+  // main process would fire each one immediately as a separate notification.
+  const processStartedAt = 1_000_000;
+  const restoredAt = processStartedAt + 5 * 60_000;
+  const reminders = [
+    { id: 1, text: "due one minute after launch", remindAt: processStartedAt + 60_000, notified: false },
+    { id: 2, text: "due four minutes after launch", remindAt: processStartedAt + 240_000, notified: false },
+    { id: 3, text: "due later", remindAt: restoredAt + 60_000, notified: false },
+  ];
+
+  const { missed, pending } = planRemindersAtLaunch(reminders, restoredAt);
 
   assert.deepEqual(
     missed.map((reminder) => reminder.id),

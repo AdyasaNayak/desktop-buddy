@@ -25,10 +25,6 @@ const {
 const PET_WINDOW = { width: 360, height: 260 };
 const SETUP_WINDOW = { width: 460, height: 600 };
 const POSITION_SAVE_DELAY = 250;
-// Reminders already past this instant were missed while the app was closed.
-// Kept separate from renderer load time so a reload cannot re-classify a
-// reminder that came due while the app was running.
-const appStartedAt = Date.now();
 
 let sleepTimer;
 let buddyWindow;
@@ -328,10 +324,6 @@ ipcMain.on("window-mode", (event, mode) => {
 
 ipcMain.on("is-packaged", (event) => {
   event.returnValue = app.isPackaged;
-});
-
-ipcMain.on("app-started-at", (event) => {
-  event.returnValue = appStartedAt;
 });
 
 ipcMain.on("set-login-item", (event, openAtLogin) => {

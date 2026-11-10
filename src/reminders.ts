@@ -117,19 +117,21 @@ export interface ReminderLaunchPlan {
 }
 
 /**
- * Separate reminders that came due before this launch from ones that are
- * still ahead. The timers live in the Electron main process, so anything that
- * was already past when the app started was missed while it was closed.
+ * Separate reminders that are already due from ones that are still ahead.
+ * Pass the time the timers are being restored, not the time the process
+ * started: a window can be reopened or reloaded long after the process began,
+ * and anything past due by then would otherwise get a zero-delay timer and
+ * fire as its own notification instead of the combined catch-up.
  */
 export function planRemindersAtLaunch(
   reminders: Reminder[],
-  launchedAt: number,
+  now: number,
 ): ReminderLaunchPlan {
   const missed: Reminder[] = [];
   const pending: Reminder[] = [];
   for (const reminder of reminders) {
     if (reminder.notified) continue;
-    if (reminder.remindAt <= launchedAt) missed.push(reminder);
+    if (reminder.remindAt <= now) missed.push(reminder);
     else pending.push(reminder);
   }
   return { missed, pending };

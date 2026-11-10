@@ -2,7 +2,6 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("desktopBuddy", {
   isPackaged: ipcRenderer.sendSync("is-packaged"),
-  appStartedAt: ipcRenderer.sendSync("app-started-at"),
   getWindowPosition: () => ipcRenderer.sendSync("window-position"),
   setWindowMode: (mode) => ipcRenderer.send("window-mode", mode),
   moveWindow: (x, y) => ipcRenderer.send("move-window", x, y),
