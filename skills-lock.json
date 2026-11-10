@@ -1,6 +1,18 @@
 {
   "version": 2,
   "skills": {
+    "diagnosing-bugs": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/diagnosing-bugs/SKILL.md",
+      "computedHash": "87c78ae966e591f9ceb177789cc5cc9de69277cd26679ffd36ca5300f430d513"
+    },
+    "find-bugs": {
+      "source": "getsentry/skills",
+      "sourceType": "github",
+      "skillPath": "skills/find-bugs/SKILL.md",
+      "computedHash": "bc847a0fed89a1855a12ad20fc5046f455fadd9951d2ac6ec440e053db71ba52"
+    },
     "find-skills": {
       "source": "vercel-labs/skills",
       "sourceType": "github",
