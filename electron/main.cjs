@@ -12,6 +12,7 @@ const path = require("node:path");
 const { setLongTimeout, clearLongTimeout } = require("./long-timer.cjs");
 const { setClickThrough } = require("./click-through.cjs");
 const { hideBuddy: hideBuddyWindow } = require("./hide-buddy.cjs");
+const { notifyWindowHidden } = require("./window-visibility.cjs");
 const {
   clampToArea,
   readWindowPosition,
@@ -221,7 +222,12 @@ function createWindow() {
   );
   buddyWindow = window;
   window.on("show", updateTrayMenu);
-  window.on("hide", updateTrayMenu);
+  window.on("hide", () => {
+    updateTrayMenu();
+    // close any menu or dialog the renderer still has open, so it does not
+    // wait behind a hidden window and pop up again on wake
+    notifyWindowHidden(window);
+  });
   window.on("close", () => {
     savePetPosition(window);
     flushWindowPosition();

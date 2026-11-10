@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import "./App.css";
 import { db, type Profile, type Reminder } from "./db";
 import { Onboarding, type OnboardingResult } from "./Onboarding";
@@ -39,6 +39,7 @@ declare global {
       cancelReminder: (id: number) => void;
       notifyMissedReminders: (notice: MissedReminderNotice) => void;
       onReminder: (callback: (id: number) => void) => () => void;
+      onWindowHidden: (callback: () => void) => () => void;
       setLoginItem: (openAtLogin: boolean) => boolean;
       isPackaged: boolean;
       appStartedAt?: number;
@@ -95,6 +96,17 @@ export default function App() {
   const windowMode =
     profile === undefined ? null : showSetup || renaming ? "setup" : "pet";
 
+  // Hiding the buddy keeps the renderer alive, so menus and dialogs would
+  // otherwise be waiting behind the window and pop up again when it wakes.
+  const closeOverlays = useCallback(() => {
+    setMenuOpen(false);
+    setWaterOpen(false);
+    setWorkOpen(false);
+    setReminderOpen(false);
+    setSleepOpen(false);
+    setChangingPet(false);
+  }, []);
+
   useEffect(() => {
     let active = true;
     const loadProfile = async () => {
@@ -120,6 +132,10 @@ export default function App() {
     if (!windowMode) return;
     window.desktopBuddy?.setWindowMode(windowMode);
   }, [windowMode]);
+
+  useEffect(() => {
+    return window.desktopBuddy?.onWindowHidden(closeOverlays);
+  }, [closeOverlays]);
 
   useEffect(() => {
     return () => {
@@ -955,11 +971,12 @@ export default function App() {
               <button
                 type="button"
                 className="btn btn--primary"
-                onClick={() =>
+                onClick={() => {
+                  setSleepOpen(false);
                   window.desktopBuddy?.sleepWindow(
                     Number(sleepMinutes) * 60 * 1000,
-                  )
-                }
+                  );
+                }}
               >
                 Sleep
               </button>
