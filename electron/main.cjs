@@ -12,6 +12,8 @@ const path = require("node:path");
 const { setLongTimeout, clearLongTimeout } = require("./long-timer.cjs");
 const { setClickThrough } = require("./click-through.cjs");
 const { hideBuddy: hideBuddyWindow } = require("./hide-buddy.cjs");
+const { showNotification } = require("./notifications.cjs");
+const { sendToRenderer } = require("./renderer-message.cjs");
 const { notifyHiddenWaterNudge } = require("./water-reminder.cjs");
 const { notifyWindowHidden } = require("./window-visibility.cjs");
 const {
@@ -113,19 +115,14 @@ function showBuddy() {
 }
 
 function showTrayHint(hasTray) {
-  if (!Notification.isSupported()) return false;
-  try {
-    new Notification({
-      title: "Desktop Buddy is still running",
-      body: hasTray
-        ? "Click the tray icon, or open Desktop Buddy again, to bring your buddy back."
-        : "Open Desktop Buddy again to bring your buddy back.",
-    }).show();
-    return true;
-  } catch (error) {
-    console.error("Could not show the tray hint", error);
-    return false;
-  }
+  return showNotification({
+    Notification,
+    title: "Desktop Buddy is still running",
+    body: hasTray
+      ? "Click the tray icon, or open Desktop Buddy again, to bring your buddy back."
+      : "Open Desktop Buddy again to bring your buddy back.",
+    failureMessage: "Could not show the tray hint",
+  });
 }
 
 // Returns true when the buddy ended up hidden. Without a tray and without a
@@ -355,9 +352,14 @@ ipcMain.on("schedule-reminder", (event, id, text, remindAt) => {
   // reminders can be months away, which plain setTimeout cannot handle
   const timer = setLongTimeout(remindAt, () => {
     reminderTimers.delete(id);
-    new Notification({ title: "Desktop Buddy reminder", body: text }).show();
+    showNotification({
+      Notification,
+      title: "Desktop Buddy reminder",
+      body: text,
+      failureMessage: "Could not show the reminder",
+    });
     // the window can be gone by the time a long reminder comes due
-    if (!event.sender.isDestroyed()) event.sender.send("reminder-fired", id);
+    sendToRenderer(event.sender, "reminder-fired", id);
   });
   reminderTimers.set(id, timer);
 });
@@ -372,17 +374,14 @@ ipcMain.on("notify-water-reminder", (event, notice) => {
   notifyHiddenWaterNudge({
     window,
     notice,
-    show: ({ title, body, onClick }) => {
-      try {
-        const notification = new Notification({ title, body });
-        notification.on("click", onClick);
-        notification.show();
-        return true;
-      } catch (error) {
-        console.error("Could not show the water reminder", error);
-        return false;
-      }
-    },
+    show: ({ title, body, onClick }) =>
+      showNotification({
+        Notification,
+        title,
+        body,
+        onClick,
+        failureMessage: "Could not show the water reminder",
+      }),
     showBuddy,
   });
 });
@@ -394,12 +393,13 @@ ipcMain.on("notify-missed-reminders", (_event, notice) => {
     typeof notice.body !== "string"
   )
     return;
-  try {
-    // one notification for the whole backlog, not one per missed reminder
-    new Notification({ title: notice.title, body: notice.body }).show();
-  } catch (error) {
-    console.error("Could not show missed reminders", error);
-  }
+  // one notification for the whole backlog, not one per missed reminder
+  showNotification({
+    Notification,
+    title: notice.title,
+    body: notice.body,
+    failureMessage: "Could not show missed reminders",
+  });
 });
 
 if (!app.requestSingleInstanceLock()) {
