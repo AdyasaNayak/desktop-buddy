@@ -50,7 +50,6 @@ declare global {
       onWindowHidden: (callback: () => void) => () => void;
       setLoginItem: (openAtLogin: boolean) => boolean;
       isPackaged: boolean;
-      appStartedAt?: number;
     };
   }
 }
@@ -154,10 +153,6 @@ export default function App() {
 
   useEffect(() => {
     let active = true;
-    // Anything un-notified and due before this run was missed while the app
-    // was closed; timers only exist while the app is running. The main process
-    // supplies its start time so a renderer reload keeps the same boundary.
-    const launchedAt = window.desktopBuddy?.appStartedAt ?? Date.now();
     // Fired reminders are visible for a while, then removed so the database
     // does not keep growing. Deleting them here also cleans up rows left by
     // older versions that did not record when a reminder fired.
@@ -260,7 +255,11 @@ export default function App() {
 
     const startReminders = async () => {
       const saved = await refreshReminders();
-      const { missed, pending } = planRemindersAtLaunch(saved, launchedAt);
+      // Compare against the moment the timers are restored, not when the
+      // process started: the window may be reloaded or reopened much later.
+      // Anything already due is part of the catch-up, never a zero-delay
+      // timer that would notify separately.
+      const { missed, pending } = planRemindersAtLaunch(saved, Date.now());
       if (missed.length > 0) {
         try {
           // Mark the backlog handled before showing it, so a reload cannot
@@ -271,6 +270,14 @@ export default function App() {
           );
           const notice = missedReminderNotice(handled);
           if (notice) announceMissedReminders(notice);
+          // A timer can outlive a reload, so clear any that still point at the
+          // reminders just consolidated. Otherwise the main process could
+          // notify them separately after the catch-up notice.
+          for (const reminder of handled) {
+            if (reminder.id !== undefined) {
+              window.desktopBuddy?.cancelReminder(reminder.id);
+            }
+          }
           for (const reminder of nextOccurrences) scheduleReminder(reminder);
           if (active) await refreshReminders();
         } catch (error) {
