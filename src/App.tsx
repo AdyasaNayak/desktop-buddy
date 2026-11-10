@@ -711,7 +711,7 @@ export default function App() {
     <div style={{ position: "relative", width: "100vw", height: "100vh" }}>
       <canvas ref={canvasRef} style={{ display: "block" }} />
 
-      {water.prompt ? (
+      {(water.prompt || welcome) && (
         <div
           style={{
             position: "absolute",
@@ -720,48 +720,50 @@ export default function App() {
             left: 8,
             zIndex: 15,
             maxWidth: "calc(100% - 16px)",
+            display: "grid",
+            justifyItems: "start",
+            gap: 6,
           }}
         >
-          <div className="buddy-bubble buddy-bubble--water">
-            <span className="buddy-bubble__tag">water break</span>
-            <p className="buddy-bubble__text">{water.prompt.message}</p>
-            <p className="buddy-bubble__meta">
-              {water.prompt.amountMl} ml now · {water.prompt.totalMl} ml today
-            </p>
-            <div className="buddy-bubble__actions">
-              <button
-                type="button"
-                className="buddy-mini-btn"
-                disabled={waterAction.pending}
-                onClick={() => void drankFromPrompt()}
-              >
-                drank it
-              </button>
-              <button
-                type="button"
-                className="buddy-mini-btn"
-                disabled={waterAction.pending}
-                onClick={() => void snoozeWater()}
-              >
-                10 min
-              </button>
-              <button
-                type="button"
-                className="buddy-mini-btn buddy-mini-btn--quiet"
-                disabled={waterAction.pending}
-                onClick={() => void turnOffWater()}
-              >
-                stop nudges
-              </button>
+          {water.prompt && (
+            <div className="buddy-bubble buddy-bubble--water">
+              <span className="buddy-bubble__tag">water break</span>
+              <p className="buddy-bubble__text">{water.prompt.message}</p>
+              <p className="buddy-bubble__meta">
+                {water.prompt.amountMl} ml now · {water.prompt.totalMl} ml today
+              </p>
+              <div className="buddy-bubble__actions">
+                <button
+                  type="button"
+                  className="buddy-mini-btn"
+                  disabled={waterAction.pending}
+                  onClick={() => void drankFromPrompt()}
+                >
+                  drank it
+                </button>
+                <button
+                  type="button"
+                  className="buddy-mini-btn"
+                  disabled={waterAction.pending}
+                  onClick={() => void snoozeWater()}
+                >
+                  10 min
+                </button>
+                <button
+                  type="button"
+                  className="buddy-mini-btn buddy-mini-btn--quiet"
+                  disabled={waterAction.pending}
+                  onClick={() => void turnOffWater()}
+                >
+                  stop nudges
+                </button>
+              </div>
             </div>
-          </div>
+          )}
+          {/* A failed water action leaves its prompt up, so the message has to
+              sit under that bubble instead of replacing it out of sight. */}
+          {welcome && <div className="buddy-bubble">{welcome}</div>}
         </div>
-      ) : (
-        welcome && (
-          <div style={{ position: "absolute", top: 8, left: 8, zIndex: 5 }}>
-            <div className="buddy-bubble">{welcome}</div>
-          </div>
-        )
       )}
 
       {work.active && (
