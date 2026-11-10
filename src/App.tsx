@@ -5,10 +5,11 @@ import { Onboarding, type OnboardingResult } from "./Onboarding";
 import { PetPreview } from "./PetPreview";
 import { WaterPanel } from "./WaterPanel";
 import { WorkPanel } from "./WorkPanel";
-import { formatClock, formatInterval, MAX_REMINDER_AHEAD_MS } from "./time";
+import { formatClock, formatInterval, formatWhen, MAX_REMINDER_AHEAD_MS } from "./time";
 import {
   missedReminderNotice,
   planRemindersAtLaunch,
+  sortRemindersForList,
   type MissedReminderNotice,
 } from "./reminders";
 import { useWaterReminder } from "./useWaterReminder";
@@ -927,9 +928,20 @@ export default function App() {
             </form>
             {reminders.length > 0 && (
               <div className="reminder-list">
-                {reminders.map((reminder) => (
-                  <div key={reminder.id} className="reminder-row">
-                    <span>{reminder.text}</span>
+                {sortRemindersForList(reminders).map((reminder) => (
+                  <div
+                    key={reminder.id}
+                    className={`reminder-row${reminder.notified ? " reminder-row--fired" : ""}`}
+                  >
+                    <span className="reminder-row__body">
+                      <span className="reminder-row__text">
+                        {reminder.text}
+                      </span>
+                      <span className="reminder-row__meta">
+                        {reminder.notified ? "fired" : "scheduled"}{" "}
+                        {formatWhen(reminder.remindAt)}
+                      </span>
+                    </span>
                     <button
                       type="button"
                       className="reminder-row__delete"

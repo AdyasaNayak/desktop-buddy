@@ -29,6 +29,17 @@ export function planRemindersAtLaunch(
   return { missed, pending };
 }
 
+/**
+ * Upcoming reminders stay at the top of the list so fired ones cannot push
+ * them out of view. Within each group the existing time order is preserved.
+ */
+export function sortRemindersForList(reminders: Reminder[]): Reminder[] {
+  return [
+    ...reminders.filter((reminder) => !reminder.notified),
+    ...reminders.filter((reminder) => reminder.notified),
+  ];
+}
+
 /** Notification bodies stay readable when a long backlog came due. */
 const MAX_LISTED = 3;
 
