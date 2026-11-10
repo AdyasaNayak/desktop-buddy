@@ -8,6 +8,7 @@ const {
   planRemindersAtLaunch,
   reminderDraftError,
   reminderRepeatLabel,
+  reminderTextError,
   selectExpiredFiredReminders,
   sortRemindersForList,
   toReminderRepeat,
@@ -232,6 +233,18 @@ test("overlong reminder text is rejected instead of being stored", () => {
       },
       now,
     ),
+    `Keep the reminder under ${MAX_REMINDER_TEXT_LENGTH} characters.`,
+  );
+});
+
+test("the text limit is shared by the form and the save path", () => {
+  assert.equal(reminderTextError("  "), "Enter a reminder message.");
+  assert.equal(
+    reminderTextError(`  ${"x".repeat(MAX_REMINDER_TEXT_LENGTH)}  `),
+    null,
+  );
+  assert.equal(
+    reminderTextError("x".repeat(MAX_REMINDER_TEXT_LENGTH + 1)),
     `Keep the reminder under ${MAX_REMINDER_TEXT_LENGTH} characters.`,
   );
 });

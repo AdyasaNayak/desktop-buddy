@@ -57,16 +57,23 @@ export function reminderRepeatLabel(
   return interval === "weekly" ? "repeats every week" : "repeats every day";
 }
 
+/** Shared text rule so the form and the save path accept the same messages. */
+export function reminderTextError(text: string): string | null {
+  const trimmed = text.trim();
+  if (!trimmed) return "Enter a reminder message.";
+  if (trimmed.length > MAX_REMINDER_TEXT_LENGTH) {
+    return `Keep the reminder under ${MAX_REMINDER_TEXT_LENGTH} characters.`;
+  }
+  return null;
+}
+
 /** Shared form validation so add and edit behave the same way. */
 export function reminderDraftError(
   draft: ReminderDraft,
   now: number,
 ): string | null {
-  const text = draft.text.trim();
-  if (!text) return "Enter a reminder message.";
-  if (text.length > MAX_REMINDER_TEXT_LENGTH) {
-    return `Keep the reminder under ${MAX_REMINDER_TEXT_LENGTH} characters.`;
-  }
+  const textProblem = reminderTextError(draft.text);
+  if (textProblem) return textProblem;
   if (!Number.isFinite(draft.remindAt) || draft.remindAt <= now) {
     return "Choose a future date and time.";
   }

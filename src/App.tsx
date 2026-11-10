@@ -11,6 +11,7 @@ import {
   missedReminderNotice,
   nextReminderTime,
   planRemindersAtLaunch,
+  reminderTextError,
   selectExpiredFiredReminders,
   toReminderRepeat,
   type MissedReminderNotice,
@@ -605,6 +606,8 @@ export default function App() {
     try {
       await db.open();
       const text = draft.text.trim();
+      const textProblem = reminderTextError(text);
+      if (textProblem) throw new Error(textProblem);
       const repeat = toReminderRepeat(draft.repeat);
       let saved: Reminder;
       if (id === undefined) {
