@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const {
   missedReminderNotice,
   planRemindersAtLaunch,
+  sortRemindersForList,
 } = require("../src/reminders.ts");
 
 test("reminders due before launch are missed; later ones stay pending", () => {
@@ -77,4 +78,19 @@ test("a long backlog is summarised instead of growing without limit", () => {
     title: "5 reminders came due while I was closed",
     body: "• one\n• two\n• three\nand 2 more",
   });
+});
+
+test("fired reminders move below upcoming ones without being hidden", () => {
+  const reminders = [
+    { id: 1, text: "fired early", remindAt: 10, notified: true },
+    { id: 2, text: "upcoming", remindAt: 20, notified: false },
+    { id: 3, text: "fired late", remindAt: 30, notified: true },
+    { id: 4, text: "upcoming later", remindAt: 40, notified: false },
+  ];
+
+  assert.deepEqual(
+    sortRemindersForList(reminders).map((reminder) => reminder.id),
+    [2, 4, 1, 3],
+  );
+  assert.equal(reminders.map((reminder) => reminder.id).join(","), "1,2,3,4");
 });

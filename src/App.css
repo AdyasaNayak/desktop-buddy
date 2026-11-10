@@ -795,7 +795,7 @@
 .reminder-list {
   display: grid;
   gap: 2px;
-  max-height: 84px;
+  max-height: 126px;
   padding-top: 2px;
   overflow-y: auto;
 }
@@ -805,7 +805,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 3px 0;
+  padding: 4px 0;
   border-bottom: 1px dashed var(--line);
   font-size: 12px;
   line-height: 1.35;
@@ -813,6 +813,34 @@
 
 .reminder-row:last-child {
   border-bottom: none;
+}
+
+.reminder-row__body {
+  display: grid;
+  min-width: 0;
+}
+
+.reminder-row__text {
+  overflow: hidden;
+  color: var(--bark);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reminder-row__meta {
+  color: var(--leaf-deep);
+  font-size: 9.5px;
+  line-height: 1.35;
+}
+
+.reminder-row--fired .reminder-row__text {
+  color: var(--bark-soft);
+  font-weight: 600;
+}
+
+.reminder-row--fired .reminder-row__meta {
+  color: var(--bark-soft);
 }
 
 .reminder-row__delete {
