@@ -75,8 +75,9 @@ so the due nudge arrives as a desktop notification instead. Clicking the
 notification brings the buddy back so the glass can still be logged. A visible
 buddy keeps showing the nudge in its own bubble instead of a notification, so
 the two never appear at the same time. Dismissing the nudge with the × in its
-bubble closes it without logging a glass; the next one arrives at the usual
-interval.
+bubble closes it without logging a glass. A nudge that was already due comes
+back at the usual interval, while dismissing a previewed nudge leaves the
+saved schedule as it was.
 
 ## Work sessions and quitting
 

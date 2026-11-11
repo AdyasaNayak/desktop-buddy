@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { db, type WaterPlan } from "./db";
 import { dayKey } from "./time";
 import { pickWaterMessage, waterNudgeNotice } from "./waterMessages";
+import { nextReminderAfterDismiss } from "./waterSchedule";
 
 export interface WaterPrompt {
   message: string;
@@ -142,17 +143,19 @@ export function useWaterReminder(
     return bridge.onWindowHidden(() => announceNudge(prompt));
   }, [prompt]);
 
-  const scheduleNext = useCallback(
-    async (minutes: number) => {
+  const scheduleAt = useCallback(
+    async (nextReminderAt: number) => {
       if (!plan) return;
-      const next: WaterPlan = {
-        ...plan,
-        nextReminderAt: Date.now() + minutes * 60_000,
-      };
+      const next: WaterPlan = { ...plan, nextReminderAt };
       await db.waterPlans.put(next);
       setPlan(next);
     },
     [plan],
+  );
+
+  const scheduleNext = useCallback(
+    (minutes: number) => scheduleAt(Date.now() + minutes * 60_000),
+    [scheduleAt],
   );
 
   const savePlan = useCallback(
@@ -207,11 +210,10 @@ export function useWaterReminder(
    * pushed out by one interval so the check does not reopen it immediately.
    */
   const dismiss = useCallback(async () => {
-    if (plan && plan.nextReminderAt <= Date.now()) {
-      await scheduleNext(plan.intervalMinutes);
-    }
+    const nextAt = plan ? nextReminderAfterDismiss(plan, Date.now()) : null;
+    if (nextAt !== null) await scheduleAt(nextAt);
     setPrompt(null);
-  }, [plan, scheduleNext]);
+  }, [plan, scheduleAt]);
 
   const turnOff = useCallback(async () => {
     await stop();

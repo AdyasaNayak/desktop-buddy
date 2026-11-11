@@ -393,17 +393,18 @@
 }
 
 .buddy-bubble__close {
+  flex: none;
   display: grid;
   place-items: center;
-  width: 18px;
-  height: 18px;
-  margin: -2px -3px -2px 0;
+  width: 24px;
+  height: 24px;
+  margin: -3px -3px -3px 0;
   padding: 0;
   border: 1.5px solid transparent;
-  border-radius: 5px;
+  border-radius: 7px;
   background: transparent;
   color: var(--bark-soft);
-  font: 700 13px/1 var(--font-body);
+  font: 700 14px/1 var(--font-body);
   cursor: pointer;
 }
 
