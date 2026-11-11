@@ -76,7 +76,7 @@ export function WorkPanel({
           </h2>
           <button
             type="button"
-            className="buddy-panel__close"
+            className="buddy-close buddy-panel__close"
             aria-label="Close work panel"
             onClick={onClose}
           >

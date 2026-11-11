@@ -904,7 +904,7 @@ export default function App() {
                 <span className="buddy-bubble__tag">water break</span>
                 <button
                   type="button"
-                  className="buddy-bubble__close"
+                  className="buddy-close buddy-bubble__close"
                   aria-label="Dismiss water nudge"
                   title="Dismiss"
                   disabled={waterAction.pending}
