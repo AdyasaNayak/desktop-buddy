@@ -39,7 +39,8 @@ function announceNudge(prompt: WaterPrompt) {
 
 /**
  * Owns the saved water schedule, today's intake, and the in-app nudge.
- * The nudge reappears until the user logs a glass, snoozes, or turns it off.
+ * The nudge stays open until the user dismisses it, logs a glass, snoozes,
+ * or turns it off.
  */
 export function useWaterReminder(
   petName: string,
@@ -200,6 +201,18 @@ export function useWaterReminder(
     setPrompt(null);
   }, [scheduleNext]);
 
+  /**
+   * Close the nudge without logging a glass or changing the water settings.
+   * A preview leaves the schedule alone, while a nudge that is already due is
+   * pushed out by one interval so the check does not reopen it immediately.
+   */
+  const dismiss = useCallback(async () => {
+    if (plan && plan.nextReminderAt <= Date.now()) {
+      await scheduleNext(plan.intervalMinutes);
+    }
+    setPrompt(null);
+  }, [plan, scheduleNext]);
+
   const turnOff = useCallback(async () => {
     await stop();
   }, [stop]);
@@ -223,6 +236,7 @@ export function useWaterReminder(
     stop,
     drank,
     snooze,
+    dismiss,
     turnOff,
     preview,
   };

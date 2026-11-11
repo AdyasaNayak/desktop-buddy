@@ -372,6 +372,13 @@
   padding: 9px 11px;
 }
 
+.buddy-bubble__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
 .buddy-bubble__tag {
   justify-self: start;
   padding: 1px 5px;
@@ -383,6 +390,32 @@
   line-height: 1.5;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+
+.buddy-bubble__close {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin: -2px -3px -2px 0;
+  padding: 0;
+  border: 1.5px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--bark-soft);
+  font: 700 13px/1 var(--font-body);
+  cursor: pointer;
+}
+
+.buddy-bubble__close:hover {
+  border-color: var(--line);
+  background: var(--paper-sunk);
+  color: var(--bark);
+}
+
+.buddy-bubble__close:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 .buddy-bubble__text {

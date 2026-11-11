@@ -74,7 +74,9 @@ on screen or hidden in the tray. A hidden window cannot show the nudge bubble,
 so the due nudge arrives as a desktop notification instead. Clicking the
 notification brings the buddy back so the glass can still be logged. A visible
 buddy keeps showing the nudge in its own bubble instead of a notification, so
-the two never appear at the same time.
+the two never appear at the same time. Dismissing the nudge with the × in its
+bubble closes it without logging a glass; the next one arrives at the usual
+interval.
 
 ## Work sessions and quitting
 
