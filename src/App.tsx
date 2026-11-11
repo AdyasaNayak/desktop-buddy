@@ -779,6 +779,11 @@ export default function App() {
       showBubble("okay, i'll ask again in 10 minutes.");
     });
 
+  const dismissWater = () =>
+    runWaterAction(async () => {
+      await water.dismiss();
+    });
+
   const turnOffWater = () =>
     runWaterAction(async () => {
       await water.turnOff();
@@ -895,7 +900,19 @@ export default function App() {
         >
           {water.prompt && (
             <div className="buddy-bubble buddy-bubble--water">
-              <span className="buddy-bubble__tag">water break</span>
+              <div className="buddy-bubble__head">
+                <span className="buddy-bubble__tag">water break</span>
+                <button
+                  type="button"
+                  className="buddy-close buddy-bubble__close"
+                  aria-label="Dismiss water nudge"
+                  title="Dismiss"
+                  disabled={waterAction.pending}
+                  onClick={() => void dismissWater()}
+                >
+                  ×
+                </button>
+              </div>
               <p className="buddy-bubble__text">{water.prompt.message}</p>
               <p className="buddy-bubble__meta">
                 {water.prompt.amountMl} ml now · {water.prompt.totalMl} ml today

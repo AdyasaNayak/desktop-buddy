@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { db, type WaterPlan } from "./db";
 import { dayKey } from "./time";
 import { pickWaterMessage, waterNudgeNotice } from "./waterMessages";
+import { nextReminderAfterDismiss } from "./waterSchedule";
 
 export interface WaterPrompt {
   message: string;
@@ -39,7 +40,8 @@ function announceNudge(prompt: WaterPrompt) {
 
 /**
  * Owns the saved water schedule, today's intake, and the in-app nudge.
- * The nudge reappears until the user logs a glass, snoozes, or turns it off.
+ * The nudge stays open until the user dismisses it, logs a glass, snoozes,
+ * or turns it off.
  */
 export function useWaterReminder(
   petName: string,
@@ -141,17 +143,19 @@ export function useWaterReminder(
     return bridge.onWindowHidden(() => announceNudge(prompt));
   }, [prompt]);
 
-  const scheduleNext = useCallback(
-    async (minutes: number) => {
+  const scheduleAt = useCallback(
+    async (nextReminderAt: number) => {
       if (!plan) return;
-      const next: WaterPlan = {
-        ...plan,
-        nextReminderAt: Date.now() + minutes * 60_000,
-      };
+      const next: WaterPlan = { ...plan, nextReminderAt };
       await db.waterPlans.put(next);
       setPlan(next);
     },
     [plan],
+  );
+
+  const scheduleNext = useCallback(
+    (minutes: number) => scheduleAt(Date.now() + minutes * 60_000),
+    [scheduleAt],
   );
 
   const savePlan = useCallback(
@@ -200,6 +204,17 @@ export function useWaterReminder(
     setPrompt(null);
   }, [scheduleNext]);
 
+  /**
+   * Close the nudge without logging a glass or changing the water settings.
+   * A preview leaves the schedule alone, while a nudge that is already due is
+   * pushed out by one interval so the check does not reopen it immediately.
+   */
+  const dismiss = useCallback(async () => {
+    const nextAt = plan ? nextReminderAfterDismiss(plan, Date.now()) : null;
+    if (nextAt !== null) await scheduleAt(nextAt);
+    setPrompt(null);
+  }, [plan, scheduleAt]);
+
   const turnOff = useCallback(async () => {
     await stop();
   }, [stop]);
@@ -223,6 +238,7 @@ export function useWaterReminder(
     stop,
     drank,
     snooze,
+    dismiss,
     turnOff,
     preview,
   };

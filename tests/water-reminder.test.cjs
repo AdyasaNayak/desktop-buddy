@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { notifyHiddenWaterNudge } = require("../electron/water-reminder.cjs");
 const { waterNudgeNotice } = require("../src/waterMessages.ts");
+const { nextReminderAfterDismiss } = require("../src/waterSchedule.ts");
 
 const NUDGE = {
   title: "Desktop Buddy water break",
@@ -95,4 +96,18 @@ test("the OS notice keeps the message and today's total", () => {
       body: "sip time\n250 ml now · 750 ml today",
     },
   );
+});
+
+test("dismissing a due nudge pushes the next one out by an interval", () => {
+  const now = 1_700_000_000_000;
+  const duePlan = { nextReminderAt: now - 1, intervalMinutes: 60 };
+
+  assert.equal(nextReminderAfterDismiss(duePlan, now), now + 60 * 60_000);
+});
+
+test("dismissing a previewed nudge keeps the saved schedule", () => {
+  const now = 1_700_000_000_000;
+  const previewPlan = { nextReminderAt: now + 15 * 60_000, intervalMinutes: 60 };
+
+  assert.equal(nextReminderAfterDismiss(previewPlan, now), null);
 });
