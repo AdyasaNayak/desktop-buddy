@@ -78,6 +78,13 @@ class BuddyDB extends Dexie {
       waterPlans: "id",
       workSessions: "++id, startedAt",
     });
+    this.version(4).stores({
+      profiles: "id",
+      water: "++id, date, ts",
+      reminders: "++id, remindAt",
+      waterPlans: "id",
+      workSessions: "++id, startedAt",
+    });
   }
 }
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { db, type WaterEntry, type WaterPlan } from "./db";
 import { dayKey } from "./time";
-import { recentWaterHistory } from "./waterHistory";
+import { WATER_HISTORY_LIMIT, recentWaterHistory } from "./waterHistory";
 import {
   DEFAULT_AMOUNT_ML,
   DEFAULT_INTERVAL_MINUTES,
@@ -22,7 +22,6 @@ export interface WaterPrompt {
 
 const CHECK_MS = 15_000;
 const SNOOZE_MINUTES = 10;
-const HISTORY_LIMIT = 200;
 
 async function readTodayMl(date: string): Promise<number> {
   const entries = await db.water.where("date").equals(date).toArray();
@@ -30,7 +29,22 @@ async function readTodayMl(date: string): Promise<number> {
 }
 
 async function readRecentEntries(): Promise<WaterEntry[]> {
-  return recentWaterHistory(await db.water.toArray(), HISTORY_LIMIT);
+  const recent = await db.water
+    .orderBy("ts")
+    .reverse()
+    .limit(WATER_HISTORY_LIMIT)
+    .toArray();
+  if (recent.length < WATER_HISTORY_LIMIT) return recent;
+
+  // The limit can end in the middle of a day. Read that whole day too so its
+  // total stays accurate, then apply the same day-preserving trim.
+  const oldestDate = recent[recent.length - 1].date;
+  const oldestDay = await db.water.where("date").equals(oldestDate).toArray();
+  const seen = new Set(recent.map((entry) => entry.id));
+  return recentWaterHistory(
+    [...recent, ...oldestDay.filter((entry) => !seen.has(entry.id))],
+    WATER_HISTORY_LIMIT,
+  );
 }
 
 /**

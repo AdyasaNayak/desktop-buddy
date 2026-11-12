@@ -1,6 +1,9 @@
 // Written with the extension so the node test runner can load this module.
 import { dayKey } from "./time.ts";
 
+/** How many recent glasses the history list keeps. */
+export const WATER_HISTORY_LIMIT = 200;
+
 /** The water fields the history list needs. */
 export interface WaterHistoryEntry {
   id?: number;
@@ -36,6 +39,19 @@ export function groupWaterHistory(
       entries: [...dayEntries].sort((a, b) => b.ts - a.ts),
     }))
     .sort((a, b) => b.date.localeCompare(a.date));
+}
+
+/** The newest glass from one calendar day, or undefined when none was logged. */
+export function latestWaterEntryForDay<T extends WaterHistoryEntry>(
+  entries: readonly T[],
+  date: string,
+): T | undefined {
+  let latest: T | undefined;
+  for (const entry of entries) {
+    if (entry.date !== date) continue;
+    if (!latest || entry.ts > latest.ts) latest = entry;
+  }
+  return latest;
 }
 
 /**

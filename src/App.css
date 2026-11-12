@@ -607,6 +607,44 @@
   font-size: 12px;
 }
 
+.buddy-panel--water .buddy-panel__form {
+  gap: 6px;
+}
+
+.buddy-panel--water .field {
+  gap: 3px;
+}
+
+.buddy-panel--water .field__label {
+  font-size: 11px;
+}
+
+.buddy-panel--water .field__input {
+  min-height: 34px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.buddy-panel--water .check {
+  font-size: 11px;
+}
+
+.buddy-panel--water .check input {
+  width: 16px;
+  height: 16px;
+}
+
+/* Keep the form's primary action visible while the fields scroll. */
+.buddy-panel--water .buddy-panel__form > .buddy-panel__row:last-child {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  padding-top: 5px;
+  border-top: 1px solid var(--line);
+  background: var(--paper-raised);
+  box-shadow: 0 -5px 10px rgba(62, 47, 30, 0.08);
+}
 
 .buddy-panel--work {
   width: min(100%, 330px);

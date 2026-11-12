@@ -71,10 +71,12 @@ The scheduling and catch-up logic lives in `electron/main.cjs` and
 
 Open **Drink water** to choose the amount for each break, a custom amount or
 interval, and a daily goal. The **Today** tab shows how much you have logged
-against that goal, and **History** lists each glass by day. **Undo** removes a
-logged glass from Today or from its History row if you tapped it by mistake.
-Water settings are saved with the schedule, so custom values, the goal, and
-quiet hours survive a restart.
+against that goal, and **History** lists each glass by day. **Undo** on Today
+removes the latest glass logged today; **Undo** on a History row removes that
+glass, whichever day it belongs to. Water settings are saved with the
+schedule, so custom values, the goal, and quiet hours survive a restart.
+History keeps the most recent 200 glasses, plus the rest of the oldest day
+shown, so a busy day can add a few more before older days drop off.
 
 Quiet hours pause nudges between the times you choose, including overnight
 windows. A nudge that would land inside quiet hours waits until they end

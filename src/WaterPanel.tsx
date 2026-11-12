@@ -1,8 +1,10 @@
 import { useEffect, useState, type FormEvent } from "react";
 import type { WaterEntry, WaterPlan } from "./db";
-import { formatDuration, formatInterval, formatWhen } from "./time";
+import { dayKey, formatDuration, formatInterval, formatWhen } from "./time";
 import {
+  WATER_HISTORY_LIMIT,
   groupWaterHistory,
+  latestWaterEntryForDay,
   waterHistoryDayLabel,
 } from "./waterHistory";
 import { usePendingAction } from "./usePendingAction";
@@ -161,7 +163,7 @@ export function WaterPanel({
     formatInterval,
   );
   const historyDays = groupWaterHistory(history);
-  const latestEntry = history[0];
+  const latestEntry = latestWaterEntryForDay(history, dayKey());
 
   const run = (action: () => Promise<void>) =>
     runPending(async () => {
@@ -461,43 +463,51 @@ export function WaterPanel({
                     No water logged yet. Every glass you log will show up here.
                   </p>
                 ) : (
-                  <div className="water-history">
-                    {historyDays.map((day) => (
-                      <section className="water-day" key={day.date}>
-                        <div className="water-day__head">
-                          <span className="water-day__label">
-                            {waterHistoryDayLabel(day.date)}
-                          </span>
-                          <span className="water-day__total">
-                            {day.totalMl} ml
-                            {day.totalMl >= goalMl ? " · goal met" : ""}
-                          </span>
-                        </div>
-                        {day.entries.map((entry) => (
-                          <div
-                            className="water-entry"
-                            key={entry.id ?? entry.ts}
-                          >
-                            <span className="water-entry__when">
-                              {formatWhen(entry.ts)}
+                  <>
+                    <div className="water-history">
+                      {historyDays.map((day) => (
+                        <section className="water-day" key={day.date}>
+                          <div className="water-day__head">
+                            <span className="water-day__label">
+                              {waterHistoryDayLabel(day.date)}
                             </span>
-                            <span className="water-entry__amount">
-                              {entry.amount} ml
+                            <span className="water-day__total">
+                              {day.totalMl} ml
+                              {day.totalMl >= goalMl ? " · goal met" : ""}
                             </span>
-                            <button
-                              type="button"
-                              className="water-entry__undo"
-                              aria-label={`Undo ${entry.amount} ml from ${formatWhen(entry.ts)}`}
-                              disabled={pending || entry.id === undefined}
-                              onClick={() => undo(entry.id)}
-                            >
-                              Undo
-                            </button>
                           </div>
-                        ))}
-                      </section>
-                    ))}
-                  </div>
+                          {day.entries.map((entry) => (
+                            <div
+                              className="water-entry"
+                              key={entry.id ?? entry.ts}
+                            >
+                              <span className="water-entry__when">
+                                {formatWhen(entry.ts)}
+                              </span>
+                              <span className="water-entry__amount">
+                                {entry.amount} ml
+                              </span>
+                              <button
+                                type="button"
+                                className="water-entry__undo"
+                                aria-label={`Undo ${entry.amount} ml from ${formatWhen(entry.ts)}`}
+                                disabled={pending || entry.id === undefined}
+                                onClick={() => undo(entry.id)}
+                              >
+                                Undo
+                              </button>
+                            </div>
+                          ))}
+                        </section>
+                      ))}
+                    </div>
+                    {history.length >= WATER_HISTORY_LIMIT && (
+                      <p className="buddy-panel__hint">
+                        History keeps your most recent {WATER_HISTORY_LIMIT}{" "}
+                        glasses.
+                      </p>
+                    )}
+                  </>
                 )}
               </>
             )}

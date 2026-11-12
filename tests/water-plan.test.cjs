@@ -18,6 +18,7 @@ const {
 } = require("../src/waterSchedule.ts");
 const {
   groupWaterHistory,
+  latestWaterEntryForDay,
   recentWaterHistory,
   waterHistoryDayLabel,
 } = require("../src/waterHistory.ts");
@@ -95,7 +96,19 @@ test("quiet hours during the day end on the same day", () => {
     new Date(2025, 0, 15, 15, 0).getTime(),
   );
   assert.equal(
+    quietHoursEnd(plan, new Date(2025, 0, 15, 13, 0).getTime()),
+    new Date(2025, 0, 15, 15, 0).getTime(),
+  );
+  assert.equal(
+    isWithinQuietHours(plan, new Date(2025, 0, 15, 13, 0).getTime()),
+    true,
+  );
+  assert.equal(
     isWithinQuietHours(plan, new Date(2025, 0, 15, 12, 59).getTime()),
+    false,
+  );
+  assert.equal(
+    isWithinQuietHours(plan, new Date(2025, 0, 15, 15, 0).getTime()),
     false,
   );
 });
@@ -185,6 +198,18 @@ test("history trimming keeps every entry from the oldest kept day", () => {
     [4, 3, 2],
   );
   assert.equal(groupWaterHistory(kept)[1].totalMl, 650);
+});
+
+test("today's undo target ignores glasses from earlier days", () => {
+  const entries = [
+    { id: 1, date: "2025-01-14", amount: 100, ts: 1 },
+    { id: 2, date: "2025-01-16", amount: 400, ts: 5 },
+    { id: 3, date: "2025-01-15", amount: 300, ts: 4 },
+    { id: 4, date: "2025-01-16", amount: 250, ts: 3 },
+  ];
+
+  assert.equal(latestWaterEntryForDay(entries, "2025-01-16")?.id, 2);
+  assert.equal(latestWaterEntryForDay(entries, "2025-01-17"), undefined);
 });
 
 test("history headings name today and yesterday", () => {
