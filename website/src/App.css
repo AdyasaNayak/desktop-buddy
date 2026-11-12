@@ -216,20 +216,6 @@
   transform: translateY(2px);
 }
 
-.cta-sticker {
-  display: inline-block;
-  padding: 0.42rem 0.62rem;
-  font-family: var(--font-pixel);
-  font-size: 0.62rem;
-  line-height: 1.5;
-  text-transform: uppercase;
-  background: var(--sun);
-  border: 2px solid var(--ink);
-  border-radius: 4px;
-  box-shadow: 2px 2px 0 var(--ink);
-  transform: rotate(3deg);
-}
-
 .cta-note {
   max-width: 48ch;
   margin: 0.35rem 0 0;
@@ -1078,10 +1064,6 @@
 
   .btn--big {
     width: 100%;
-  }
-
-  .cta-sticker {
-    align-self: flex-start;
   }
 
   .pet-card {

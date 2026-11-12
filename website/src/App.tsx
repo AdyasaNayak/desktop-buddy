@@ -381,7 +381,6 @@ export default function App() {
               </svg>
               Download for Windows
             </a>
-            <span className="cta-sticker">Cat + star + hamster + jellyfish + dog inside</span>
           </div>
 
           {installer ? (
