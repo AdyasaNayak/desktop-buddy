@@ -2,15 +2,12 @@ import { useEffect, useState, type FormEvent } from "react";
 import type { WaterPlan } from "./db";
 import { formatDuration, formatInterval } from "./time";
 import { usePendingAction } from "./usePendingAction";
-
-const AMOUNT_OPTIONS = [
-  { value: 100, label: "a few sips (100 ml)" },
-  { value: 250, label: "a glass (250 ml)" },
-  { value: 400, label: "a big glass (400 ml)" },
-  { value: 500, label: "a bottle (500 ml)" },
-];
-
-const INTERVAL_OPTIONS = [15, 30, 45, 60, 90, 120];
+import {
+  AMOUNT_OPTIONS,
+  INTERVAL_OPTIONS,
+  amountLabel,
+  withSavedOption,
+} from "./waterOptions";
 
 function nextBreakLabel(nextReminderAt: number, now: number): string {
   const wait = Math.max(0, nextReminderAt - now);
@@ -63,6 +60,16 @@ export function WaterPanel({
   const [note, setNote] = useState("");
   const { pending, run: runPending } = usePendingAction();
   const enabled = Boolean(plan?.enabled);
+  const amountOptions = withSavedOption(
+    AMOUNT_OPTIONS,
+    plan?.amountMl,
+    amountLabel,
+  );
+  const intervalOptions = withSavedOption(
+    INTERVAL_OPTIONS,
+    plan?.intervalMinutes,
+    formatInterval,
+  );
 
   const run = (action: () => Promise<void>) =>
     runPending(async () => {
@@ -180,7 +187,7 @@ export function WaterPanel({
                 value={amountMl}
                 onChange={(event) => setAmountMl(Number(event.target.value))}
               >
-                {AMOUNT_OPTIONS.map((option) => (
+                {amountOptions.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
@@ -197,9 +204,9 @@ export function WaterPanel({
                   setIntervalMinutes(Number(event.target.value))
                 }
               >
-                {INTERVAL_OPTIONS.map((minutes) => (
-                  <option key={minutes} value={minutes}>
-                    {formatInterval(minutes)}
+                {intervalOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
                   </option>
                 ))}
               </select>
