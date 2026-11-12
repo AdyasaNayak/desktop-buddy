@@ -69,15 +69,26 @@ The scheduling and catch-up logic lives in `electron/main.cjs` and
 
 ## Water breaks and hiding
 
-Water nudges are checked while Desktop Buddy is running, whether the buddy is
-on screen or hidden in the tray. A hidden window cannot show the nudge bubble,
-so the due nudge arrives as a desktop notification instead. Clicking the
-notification brings the buddy back so the glass can still be logged. A visible
-buddy keeps showing the nudge in its own bubble instead of a notification, so
-the two never appear at the same time. Dismissing the nudge with the × in its
-bubble closes it without logging a glass. A nudge that was already due comes
-back at the usual interval, while dismissing a previewed nudge leaves the
-saved schedule as it was.
+Open **Drink water** to choose the amount for each break, a custom amount or
+interval, and a daily goal. The **Today** tab shows how much you have logged
+against that goal, and **History** lists each glass by day. **Undo** on Today
+removes the latest glass logged today; **Undo** on a History row removes that
+glass, whichever day it belongs to. Water settings are saved with the
+schedule, so custom values, the goal, and quiet hours survive a restart.
+History keeps the most recent 200 glasses, plus the rest of the oldest day
+shown, so a busy day can add a few more before older days drop off.
+
+Quiet hours pause nudges between the times you choose, including overnight
+windows. A nudge that would land inside quiet hours waits until they end
+instead. Nudges are checked while Desktop Buddy is running, whether the buddy
+is on screen or hidden in the tray. A hidden window cannot show the nudge
+bubble, so the due nudge arrives as a desktop notification instead. Clicking
+the notification brings the buddy back so the glass can still be logged. A
+visible buddy keeps showing the nudge in its own bubble instead of a
+notification, so the two never appear at the same time. Dismissing the nudge
+with the × in its bubble closes it without logging a glass. A nudge that was
+already due comes back at the usual interval, while dismissing a previewed
+nudge leaves the saved schedule as it was.
 
 ## Work sessions and quitting
 

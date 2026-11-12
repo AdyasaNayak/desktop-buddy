@@ -1,8 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { db, type WaterPlan } from "./db";
+import { db, type WaterEntry, type WaterPlan } from "./db";
 import { dayKey } from "./time";
+import { WATER_HISTORY_LIMIT, recentWaterHistory } from "./waterHistory";
+import {
+  DEFAULT_AMOUNT_ML,
+  DEFAULT_INTERVAL_MINUTES,
+  type WaterSettings,
+} from "./waterOptions";
 import { pickWaterMessage, waterNudgeNotice } from "./waterMessages";
-import { nextReminderAfterDismiss } from "./waterSchedule";
+import {
+  isWithinQuietHours,
+  nextReminderAfterDismiss,
+  nextReminderAfterQuietHours,
+} from "./waterSchedule";
 
 export interface WaterPrompt {
   message: string;
@@ -12,12 +22,29 @@ export interface WaterPrompt {
 
 const CHECK_MS = 15_000;
 const SNOOZE_MINUTES = 10;
-const DEFAULT_AMOUNT_ML = 250;
-const DEFAULT_INTERVAL_MINUTES = 60;
 
 async function readTodayMl(date: string): Promise<number> {
   const entries = await db.water.where("date").equals(date).toArray();
   return entries.reduce((total, entry) => total + entry.amount, 0);
+}
+
+async function readRecentEntries(): Promise<WaterEntry[]> {
+  const recent = await db.water
+    .orderBy("ts")
+    .reverse()
+    .limit(WATER_HISTORY_LIMIT)
+    .toArray();
+  if (recent.length < WATER_HISTORY_LIMIT) return recent;
+
+  // The limit can end in the middle of a day. Read that whole day too so its
+  // total stays accurate, then apply the same day-preserving trim.
+  const oldestDate = recent[recent.length - 1].date;
+  const oldestDay = await db.water.where("date").equals(oldestDate).toArray();
+  const seen = new Set(recent.map((entry) => entry.id));
+  return recentWaterHistory(
+    [...recent, ...oldestDay.filter((entry) => !seen.has(entry.id))],
+    WATER_HISTORY_LIMIT,
+  );
 }
 
 /**
@@ -39,9 +66,9 @@ function announceNudge(prompt: WaterPrompt) {
 }
 
 /**
- * Owns the saved water schedule, today's intake, and the in-app nudge.
- * The nudge stays open until the user dismisses it, logs a glass, snoozes,
- * or turns it off.
+ * Owns the saved water schedule, today's intake, history, and the in-app
+ * nudge. The nudge stays open until the user dismisses it, logs a glass,
+ * snoozes, or turns it off.
  */
 export function useWaterReminder(
   petName: string,
@@ -50,24 +77,30 @@ export function useWaterReminder(
 ) {
   const [plan, setPlan] = useState<WaterPlan | null>(null);
   const [todayMl, setTodayMl] = useState(0);
+  const [history, setHistory] = useState<WaterEntry[]>([]);
   const [prompt, setPrompt] = useState<WaterPrompt | null>(null);
   const lastMessage = useRef<string | null>(null);
   const loadedDay = useRef(dayKey());
   const totalRequest = useRef(0);
 
   /**
-   * Re-read today's intake. A slower, older read never overwrites a newer
-   * total, which matters when a drink is logged just as the day changes.
+   * Re-read today's intake and the recent log. A slower, older read never
+   * overwrites a newer total, which matters when a drink is logged just as
+   * the day changes.
    */
-  const refreshTodayMl = useCallback(async () => {
+  const refreshWater = useCallback(async () => {
     const request = ++totalRequest.current;
     const key = dayKey();
-    const total = await readTodayMl(key);
+    const [total, entries] = await Promise.all([
+      readTodayMl(key),
+      readRecentEntries(),
+    ]);
     if (request !== totalRequest.current) return total;
     // Midnight can pass while the query runs; the day check will read again.
     if (key !== dayKey()) return total;
     loadedDay.current = key;
     setTodayMl(total);
+    setHistory(entries);
     setPrompt((current) =>
       current ? { ...current, totalMl: total } : current,
     );
@@ -80,7 +113,7 @@ export function useWaterReminder(
       try {
         const [savedPlan] = await Promise.all([
           db.waterPlans.get("me"),
-          refreshTodayMl(),
+          refreshWater(),
         ]);
         if (!active) return;
         setPlan(savedPlan ?? null);
@@ -92,14 +125,14 @@ export function useWaterReminder(
     return () => {
       active = false;
     };
-  }, [refreshTodayMl]);
+  }, [refreshWater]);
 
   // The buddy can stay open for days, so refresh when the local day changes.
   // A sleeping machine can stall the timer, hence the focus checks too.
   useEffect(() => {
     const checkDay = () => {
       if (dayKey() === loadedDay.current) return;
-      void refreshTodayMl().catch((error) => {
+      void refreshWater().catch((error) => {
         console.error("Could not refresh today's water", error);
       });
     };
@@ -114,13 +147,35 @@ export function useWaterReminder(
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("focus", checkDay);
     };
-  }, [refreshTodayMl]);
+  }, [refreshWater]);
+
+  const scheduleAt = useCallback(
+    async (nextReminderAt: number) => {
+      if (!plan) return;
+      const next: WaterPlan = {
+        ...plan,
+        // Quiet hours win over every scheduling action so a nudge never
+        // arrives while the user asked for silence.
+        nextReminderAt: nextReminderAfterQuietHours(plan, nextReminderAt),
+      };
+      await db.waterPlans.put(next);
+      setPlan(next);
+    },
+    [plan],
+  );
 
   useEffect(() => {
     if (!ready || !plan?.enabled) return;
     const check = () => {
       if (prompt) return;
-      if (plan.nextReminderAt > Date.now()) return;
+      const now = Date.now();
+      if (plan.nextReminderAt > now) return;
+      if (isWithinQuietHours(plan, now)) {
+        void scheduleAt(now).catch((error) => {
+          console.error("Could not move the water nudge past quiet hours", error);
+        });
+        return;
+      }
       const message = pickWaterMessage(
         { petName, yourName, amountMl: plan.amountMl },
         lastMessage.current,
@@ -133,46 +188,43 @@ export function useWaterReminder(
     check();
     const timer = window.setInterval(check, CHECK_MS);
     return () => window.clearInterval(timer);
-  }, [ready, plan, prompt, todayMl, petName, yourName]);
+  }, [ready, plan, prompt, todayMl, petName, yourName, scheduleAt]);
 
   // Hiding the buddy with a nudge still waiting takes its bubble off screen,
-  // so pass that pending nudge to the OS notification path too.
+  // so pass that pending nudge to the OS notification path too. Quiet hours
+  // are checked at hide time, not when this effect was set up, so a nudge
+  // shown just before quiet hours starts cannot slip through.
   useEffect(() => {
     const bridge = window.desktopBuddy;
     if (!bridge || !prompt) return;
-    return bridge.onWindowHidden(() => announceNudge(prompt));
-  }, [prompt]);
-
-  const scheduleAt = useCallback(
-    async (nextReminderAt: number) => {
-      if (!plan) return;
-      const next: WaterPlan = { ...plan, nextReminderAt };
-      await db.waterPlans.put(next);
-      setPlan(next);
-    },
-    [plan],
-  );
+    return bridge.onWindowHidden(() => {
+      if (isWithinQuietHours(plan ?? {}, Date.now())) return;
+      announceNudge(prompt);
+    });
+  }, [plan, prompt]);
 
   const scheduleNext = useCallback(
     (minutes: number) => scheduleAt(Date.now() + minutes * 60_000),
     [scheduleAt],
   );
 
-  const savePlan = useCallback(
-    async (amountMl: number, intervalMinutes: number) => {
-      const next: WaterPlan = {
-        id: "me",
-        amountMl,
-        intervalMinutes,
-        nextReminderAt: Date.now() + intervalMinutes * 60_000,
-        enabled: true,
-      };
-      await db.waterPlans.put(next);
-      setPlan(next);
-      setPrompt(null);
-    },
-    [],
-  );
+  const savePlan = useCallback(async (settings: WaterSettings) => {
+    const next: WaterPlan = {
+      id: "me",
+      amountMl: settings.amountMl,
+      intervalMinutes: settings.intervalMinutes,
+      dailyGoalMl: settings.dailyGoalMl,
+      quietHours: { ...settings.quietHours },
+      nextReminderAt: nextReminderAfterQuietHours(
+        settings,
+        Date.now() + settings.intervalMinutes * 60_000,
+      ),
+      enabled: true,
+    };
+    await db.waterPlans.put(next);
+    setPlan(next);
+    setPrompt(null);
+  }, []);
 
   const stop = useCallback(async () => {
     if (!plan) return;
@@ -186,9 +238,20 @@ export function useWaterReminder(
     async (amountMl?: number) => {
       const ml = amountMl ?? plan?.amountMl ?? DEFAULT_AMOUNT_ML;
       await db.water.add({ date: dayKey(), amount: ml, ts: Date.now() });
-      return refreshTodayMl();
+      return refreshWater();
     },
-    [plan?.amountMl, refreshTodayMl],
+    [plan?.amountMl, refreshWater],
+  );
+
+  /** Remove a logged drink, latest first when no entry is named. */
+  const undoDrink = useCallback(
+    async (entryId?: number) => {
+      const targetId =
+        entryId ?? history.find((entry) => entry.id !== undefined)?.id;
+      if (targetId !== undefined) await db.water.delete(targetId);
+      return refreshWater();
+    },
+    [history, refreshWater],
   );
 
   /** Log the glass from the nudge and push the next reminder out. */
@@ -233,10 +296,12 @@ export function useWaterReminder(
   return {
     plan,
     todayMl,
+    history,
     prompt,
     savePlan,
     stop,
     drank,
+    undoDrink,
     snooze,
     dismiss,
     turnOff,
