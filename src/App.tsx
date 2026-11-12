@@ -20,6 +20,7 @@ import {
 import { useWaterReminder } from "./useWaterReminder";
 import { useWorkLog } from "./useWorkLog";
 import type { WaterNudgeNotice } from "./waterMessages";
+import type { WaterSettings } from "./waterOptions";
 import { usePendingAction } from "./usePendingAction";
 import { useClickThrough } from "./useClickThrough";
 import type { Rect } from "./clickThrough";
@@ -744,11 +745,14 @@ export default function App() {
     );
   };
 
-  const saveWaterPlan = async (amountMl: number, intervalMinutes: number) => {
-    await water.savePlan(amountMl, intervalMinutes);
+  const saveWaterPlan = async (settings: WaterSettings) => {
+    await water.savePlan(settings);
     controlRef.current.drinkLeft = 1600;
+    const quiet = settings.quietHours.enabled
+      ? " quiet hours are saved too."
+      : "";
     showBubble(
-      `water breaks on! ${amountMl} ml every ${formatInterval(intervalMinutes)}. i'll keep you topped up.`,
+      `water breaks on! ${settings.amountMl} ml every ${formatInterval(settings.intervalMinutes)}. i'll keep you topped up.${quiet}`,
     );
   };
 
@@ -1121,9 +1125,11 @@ export default function App() {
           key={water.plan ? "plan-loaded" : "plan-empty"}
           plan={water.plan}
           todayMl={water.todayMl}
+          history={water.history}
           onSave={saveWaterPlan}
           onStop={stopWaterPlan}
           onDrink={water.drank}
+          onUndo={water.undoDrink}
           onPreview={water.preview}
           onClose={() => setWaterOpen(false)}
         />

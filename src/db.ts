@@ -1,5 +1,6 @@
 import Dexie, { type Table } from "dexie";
 import type { PetType } from "./pets";
+import type { QuietHours } from "./waterOptions";
 
 export interface Profile {
   id: string;
@@ -35,6 +36,10 @@ export interface WaterPlan {
   intervalMinutes: number;
   nextReminderAt: number;
   enabled: boolean;
+  /** Daily intake goal; missing on plans saved by older versions. */
+  dailyGoalMl?: number;
+  /** Times when nudges should stay quiet; missing means always allowed. */
+  quietHours?: QuietHours;
 }
 
 export interface WorkSession {
