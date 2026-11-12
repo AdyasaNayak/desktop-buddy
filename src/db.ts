@@ -49,8 +49,12 @@ export interface WorkSession {
   endedAt?: number;
   durationMs: number;
   heartbeatAt: number;
-  /** Time excluded because the app was closed while the timer was running. */
+  /** Time excluded because the timer was paused or the app was closed. */
   pausedMs?: number;
+  /** When the user paused the timer; missing while it is running. */
+  pausedAt?: number;
+  /** When the long-session break reminder was shown. */
+  longReminderAt?: number;
 }
 
 class BuddyDB extends Dexie {

@@ -6,7 +6,7 @@ import { PetPreview } from "./PetPreview";
 import { WaterPanel } from "./WaterPanel";
 import { WorkPanel } from "./WorkPanel";
 import { ReminderPanel } from "./ReminderPanel";
-import { formatClock, formatInterval } from "./time";
+import { formatClock, formatDuration, formatInterval } from "./time";
 import {
   missedReminderNotice,
   nextReminderTime,
@@ -47,6 +47,7 @@ declare global {
       cancelReminder: (id: number) => void;
       notifyMissedReminders: (notice: MissedReminderNotice) => void;
       notifyWaterReminder: (notice: WaterNudgeNotice) => void;
+      notifyWorkReminder: (notice: { title: string; body: string }) => void;
       onReminder: (callback: (id: number) => void) => () => void;
       onWindowHidden: (callback: () => void) => () => void;
       setLoginItem: (openAtLogin: boolean) => boolean;
@@ -80,6 +81,7 @@ export default function App() {
   const positionRef = useRef<{ x: number; y: number } | null>(null);
   const petBoxRef = useRef<Rect | null>(null);
   const welcomeTimer = useRef<number | null>(null);
+  const longBreakNotified = useRef<number | null>(null);
   const showSetup = profile === null;
   // true once a profile exists (or is created), no form is shown, and the pet view can mount
   const petReady = profile !== undefined && !showSetup && !renaming;
@@ -90,6 +92,12 @@ export default function App() {
     petReady,
   );
   const work = useWorkLog();
+  const {
+    active: activeWork,
+    longBreakDue,
+    elapsedMs: workElapsedMs,
+    acknowledgeLongReminder,
+  } = work;
   const refreshClickThrough = useClickThrough(petReady, petBoxRef);
   const windowMode =
     profile === undefined ? null : showSetup || renaming ? "setup" : "pet";
@@ -721,6 +729,35 @@ export default function App() {
     welcomeTimer.current = window.setTimeout(() => setWelcome(null), ms);
   };
 
+  // One break nudge per long session. The acknowledgement is saved with the
+  // session so reopening the app does not repeat it for the same stretch.
+  useEffect(() => {
+    if (!activeWork || !longBreakDue) {
+      if (!activeWork) longBreakNotified.current = null;
+      return;
+    }
+    if (longBreakNotified.current === activeWork.id) return;
+    longBreakNotified.current = activeWork.id;
+
+    const elapsed = formatDuration(workElapsedMs);
+    showBubble(
+      `you've been working on ${activeWork.task} for ${elapsed}. maybe stretch for a minute?`,
+      9000,
+    );
+    announceWorkReminder({
+      title: "Desktop Buddy work break",
+      body: `${elapsed} on ${activeWork.task}. A short break might help.`,
+    });
+    void acknowledgeLongReminder().catch((error) => {
+      console.error("Could not save the work break reminder", error);
+    });
+  }, [
+    activeWork,
+    longBreakDue,
+    workElapsedMs,
+    acknowledgeLongReminder,
+  ]);
+
   // A failed hide leaves the buddy on screen instead of stranding the app, so
   // say why rather than making the button look broken.
   const hideBuddy = () => {
@@ -957,13 +994,16 @@ export default function App() {
 
       {work.active && (
         <div
-          className="buddy-timer"
-          title={`working on ${work.active.task}`}
+          className={`buddy-timer${work.active.pausedAt !== undefined ? " buddy-timer--paused" : ""}`}
+          title={`${work.active.pausedAt !== undefined ? "paused" : "working"} on ${work.active.task}`}
         >
           <span className="buddy-timer__clock">
             {formatClock(work.elapsedMs)}
           </span>
-          <span className="buddy-timer__task">{work.active.task}</span>
+          <span className="buddy-timer__task">
+            {work.active.task}
+            {work.active.pausedAt !== undefined ? " · paused" : ""}
+          </span>
         </div>
       )}
 
@@ -1143,6 +1183,11 @@ export default function App() {
           recent={work.recent}
           onStart={startWork}
           onStop={work.stop}
+          onPause={work.pause}
+          onResume={work.resume}
+          onEdit={work.editSession}
+          onDelete={work.deleteSession}
+          onExport={work.exportCsv}
           onClose={() => setWorkOpen(false)}
         />
       )}
@@ -1220,6 +1265,16 @@ function PetChoice({
       </span>
     </button>
   );
+}
+
+function announceWorkReminder(notice: { title: string; body: string }) {
+  if (window.desktopBuddy) {
+    window.desktopBuddy.notifyWorkReminder(notice);
+    return;
+  }
+  if ("Notification" in window && Notification.permission === "granted") {
+    new Notification(notice.title, { body: notice.body });
+  }
 }
 
 function announceMissedReminders(notice: MissedReminderNotice) {

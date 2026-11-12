@@ -1,9 +1,16 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
+  LONG_SESSION_REMINDER_MS,
+  applyWorkSessionEdit,
   closeSession,
   elapsedWorkMs,
+  longSessionReminderDue,
+  pauseSession,
   planWorkStartup,
+  resumePausedSession,
+  workSessionEditError,
+  workSessionsToCsv,
 } = require("../src/workSessions.ts");
 
 function openSession(overrides) {
@@ -123,4 +130,130 @@ test("elapsed work never goes negative", () => {
     elapsedWorkMs({ startedAt: 10_000, pausedMs: 20_000 }, 5_000),
     0,
   );
+});
+
+test("pausing freezes the clock and resuming skips the paused stretch", () => {
+  const running = openSession({ startedAt: 1_000, heartbeatAt: 61_000 });
+  const paused = pauseSession(running, 61_000);
+
+  assert.equal(paused.pausedAt, 61_000);
+  assert.equal(elapsedWorkMs(paused, 121_000), 60_000);
+
+  const resumed = resumePausedSession(paused, 121_000);
+  assert.equal(resumed.pausedAt, undefined);
+  assert.equal(resumed.pausedMs, 60_000);
+  assert.equal(elapsedWorkMs(resumed, 126_000), 65_000);
+});
+
+test("a timer paused before a restart stays paused without double counting", () => {
+  const paused = pauseSession(openSession(), 61_000);
+  const reopened = planWorkStartup([paused], 301_000).resume;
+
+  assert.equal(reopened.pausedAt, 61_000);
+  assert.equal(reopened.pausedMs, 0);
+  assert.equal(elapsedWorkMs(reopened, 301_000), 60_000);
+
+  const resumed = resumePausedSession(reopened, 301_000);
+  assert.equal(resumed.pausedMs, 240_000);
+  assert.equal(elapsedWorkMs(resumed, 301_000), 60_000);
+});
+
+test("stopping while paused records the final paused stretch", () => {
+  const paused = pauseSession(openSession(), 61_000);
+  const closed = closeSession(paused, 121_000);
+
+  assert.equal(closed.endedAt, 121_000);
+  assert.equal(closed.durationMs, 60_000);
+  assert.equal(closed.pausedMs, 60_000);
+  assert.equal(closed.pausedAt, undefined);
+  assert.equal(
+    closed.startedAt + closed.durationMs + closed.pausedMs,
+    closed.endedAt,
+  );
+});
+
+test("a long session asks for a break once, and only while running", () => {
+  const startedAt = 1_000;
+  const session = openSession({ startedAt, heartbeatAt: startedAt });
+  const almost = startedAt + LONG_SESSION_REMINDER_MS - 1;
+  const due = startedAt + LONG_SESSION_REMINDER_MS;
+
+  assert.equal(longSessionReminderDue(session, almost), false);
+  assert.equal(longSessionReminderDue(session, due), true);
+  assert.equal(
+    longSessionReminderDue(pauseSession(session, due), due + 1_000),
+    false,
+  );
+  assert.equal(
+    longSessionReminderDue({ ...session, longReminderAt: due }, due + 1_000),
+    false,
+  );
+  assert.equal(
+    longSessionReminderDue(
+      { ...session, endedAt: due, durationMs: LONG_SESSION_REMINDER_MS },
+      due + 1_000,
+    ),
+    false,
+  );
+});
+
+test("editing a session updates its task, start, and duration", () => {
+  const saved = {
+    ...openSession({ pausedMs: 10_000 }),
+    endedAt: 61_000,
+    durationMs: 50_000,
+  };
+  const edited = applyWorkSessionEdit(saved, {
+    task: "  finish the report  ",
+    startedAt: 5_000,
+    durationMs: 120_000,
+  });
+
+  assert.equal(edited.task, "finish the report");
+  assert.equal(edited.startedAt, 5_000);
+  assert.equal(edited.durationMs, 120_000);
+  assert.equal(edited.endedAt, 135_000);
+  assert.equal(edited.pausedMs, 10_000);
+  assert.equal(edited.heartbeatAt, 135_000);
+});
+
+test("session edits need a task, a real start, and a sensible duration", () => {
+  const valid = { task: "report", startedAt: 1_000, durationMs: 60_000 };
+  assert.equal(workSessionEditError(valid), null);
+  assert.match(workSessionEditError({ ...valid, task: "  " }), /task name/i);
+  assert.match(
+    workSessionEditError({ ...valid, startedAt: Number.NaN }),
+    /start time/i,
+  );
+  assert.match(
+    workSessionEditError({ ...valid, durationMs: 0 }),
+    /one minute/i,
+  );
+  assert.match(
+    workSessionEditError({ ...valid, task: "x".repeat(61) }),
+    /limited to 60/i,
+  );
+});
+
+test("the CSV export covers closed sessions and escapes task names", () => {
+  const closed = {
+    ...openSession(),
+    task: 'report, "Q4"',
+    startedAt: Date.UTC(2026, 2, 3, 9, 0),
+    endedAt: Date.UTC(2026, 2, 3, 10, 30),
+    durationMs: 90 * 60_000,
+    pausedMs: 30 * 60_000,
+  };
+  const csv = workSessionsToCsv([
+    closed,
+    openSession({ id: 2, task: "still running" }),
+  ]);
+
+  assert.match(
+    csv,
+    /^Task,Started,Ended,Duration \(minutes\),Paused \(minutes\)\r\n/,
+  );
+  assert.match(csv, /"report, ""Q4"""/);
+  assert.match(csv, /2026-03-03T09:00:00.000Z,2026-03-03T10:30:00.000Z,90,30/);
+  assert.doesNotMatch(csv, /still running/);
 });

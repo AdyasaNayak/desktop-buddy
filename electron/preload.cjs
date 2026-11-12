@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld("desktopBuddy", {
     ipcRenderer.send("notify-missed-reminders", notice),
   notifyWaterReminder: (notice) =>
     ipcRenderer.send("notify-water-reminder", notice),
+  notifyWorkReminder: (notice) =>
+    ipcRenderer.send("notify-work-reminder", notice),
   onReminder: (callback) => {
     const listener = (_event, id) => callback(id);
     ipcRenderer.on("reminder-fired", listener);

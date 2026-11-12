@@ -514,6 +514,15 @@
   white-space: nowrap;
 }
 
+.buddy-timer--paused {
+  border-style: dashed;
+  background: var(--paper-sunk);
+}
+
+.buddy-timer--paused .buddy-timer__clock {
+  color: var(--bark-soft);
+}
+
 .buddy-menu {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -650,6 +659,27 @@
   width: min(100%, 330px);
   gap: 8px;
   padding: 12px;
+}
+
+.buddy-panel--work .btn {
+  min-height: 34px;
+  padding: 5px 8px;
+  font-size: 12px;
+}
+
+.buddy-panel--work .field {
+  gap: 2px;
+}
+
+.buddy-panel--work .field__label {
+  font-size: 10.5px;
+}
+
+.buddy-panel--work .field__input {
+  min-height: 32px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  font-size: 13px;
 }
 
 .buddy-panel--pets .pet-picker {
@@ -924,11 +954,35 @@
   letter-spacing: 0.02em;
 }
 
+.work-active--paused {
+  border-style: dashed;
+  background: var(--paper-sunk);
+}
+
+.work-active--paused .work-active__clock {
+  color: var(--bark-soft);
+}
+
 .work-active__since {
   margin: 0;
   color: var(--bark-soft);
   font-size: 10px;
   line-height: 1.3;
+}
+
+.work-active__long {
+  margin: 1px 0 0;
+  color: #8a6a2f;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.work-log__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
 }
 
 .work-log__title {
@@ -942,16 +996,23 @@
   letter-spacing: 0.05em;
 }
 
+.work-log__export {
+  min-height: 26px;
+  margin: -2px -4px -2px 0;
+  padding: 2px 6px;
+  font-size: 10.5px;
+}
+
 .work-list {
   display: grid;
   gap: 2px;
-  max-height: 140px;
+  max-height: 170px;
   overflow-y: auto;
 }
 
 .work-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 0 6px;
   padding: 4px 6px;
   border-radius: 7px;
@@ -976,11 +1037,67 @@
   white-space: nowrap;
 }
 
+.work-row__actions {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.work-row__action {
+  padding: 1px 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--leaf-deep);
+  font: 700 9.5px/1.5 var(--font-body);
+  cursor: pointer;
+}
+
+.work-row__action:hover {
+  border-color: var(--bark-soft);
+  background: var(--sun-soft);
+  color: var(--bark);
+}
+
+.work-row__delete {
+  padding: 1px 5px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--bark-soft);
+  font: 700 15px/1 var(--font-body);
+  cursor: pointer;
+}
+
+.work-row__delete:hover {
+  background: var(--sun-soft);
+  color: var(--bark);
+}
+
+.work-row__action:disabled,
+.work-row__delete:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .work-row__meta {
   grid-column: 1 / -1;
   color: var(--bark-soft);
   font-size: 9.5px;
   line-height: 1.35;
+}
+
+.work-edit {
+  display: grid;
+  gap: 5px;
+  padding: 6px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--paper-raised);
+}
+
+.work-edit .buddy-panel__row {
+  gap: 4px;
 }
 
 .reminder-list {

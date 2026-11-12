@@ -378,6 +378,22 @@ ipcMain.on("notify-water-reminder", (event, notice) => {
   });
 });
 
+ipcMain.on("notify-work-reminder", (_event, notice) => {
+  if (
+    !notice ||
+    typeof notice.title !== "string" ||
+    typeof notice.body !== "string"
+  )
+    return;
+  showNotification({
+    Notification,
+    title: notice.title,
+    body: notice.body,
+    onClick: showBuddy,
+    failureMessage: "Could not show the work break reminder",
+  });
+});
+
 ipcMain.on("notify-missed-reminders", (_event, notice) => {
   if (
     !notice ||
