@@ -124,6 +124,119 @@ test("a missing heartbeat falls back to the start time", () => {
   assert.equal(elapsedWorkMs(resume, 50_000), 0);
 });
 
+test("a stored duration survives recovery without a heartbeat", () => {
+  const session = openSession({ heartbeatAt: undefined, durationMs: 30_000 });
+  const { resume } = planWorkStartup([session], 100_000);
+
+  assert.equal(resume.durationMs, 30_000);
+  assert.equal(elapsedWorkMs(resume, 100_000), 30_000);
+});
+
+test("a backward clock change keeps the work already banked", () => {
+  const running = openSession({
+    startedAt: 1_000,
+    heartbeatAt: 61_000,
+    durationMs: 60_000,
+  });
+
+  assert.equal(elapsedWorkMs(running, 62_000), 61_000);
+  // The clock went back a minute; the timer freezes instead of shrinking to 1s.
+  assert.equal(elapsedWorkMs(running, 2_000), 60_000);
+  assert.equal(elapsedWorkMs(running, 10_000), 60_000);
+  assert.equal(elapsedWorkMs(running, 65_000), 64_000);
+
+  const stopped = closeSession(running, 2_000);
+  assert.equal(stopped.durationMs, 60_000);
+  assert.equal(stopped.endedAt, 61_000);
+});
+
+test("recovery after a backward clock change keeps the counted work", () => {
+  const running = openSession({
+    startedAt: 1_000,
+    heartbeatAt: 601_000,
+    durationMs: 600_000,
+  });
+  const { resume } = planWorkStartup([running], 100_000);
+
+  assert.equal(resume.durationMs, 600_000);
+  assert.equal(resume.pausedMs, 0);
+  assert.equal(elapsedWorkMs(resume, 100_000), 600_000);
+  assert.equal(elapsedWorkMs(resume, 105_000), 605_000);
+});
+
+test("recovery after a forward clock change does not bank closed time", () => {
+  const running = openSession({
+    startedAt: 1_000,
+    heartbeatAt: 61_000,
+    durationMs: 60_000,
+  });
+  const later = 61_000 + 60 * 60_000;
+  const { resume } = planWorkStartup([running], later);
+
+  assert.equal(resume.durationMs, 60_000);
+  assert.equal(elapsedWorkMs(resume, later), 60_000);
+  // Correcting the clock back must not erase that work either.
+  assert.equal(elapsedWorkMs(resume, 120_000), 60_000);
+});
+
+test("an idle duplicate is discarded and the active timer is resumed", () => {
+  const active = openSession({
+    id: 1,
+    startedAt: 1_000,
+    heartbeatAt: 100_000,
+    durationMs: 99_000,
+  });
+  const stray = openSession({
+    id: 2,
+    startedAt: 50_000,
+    heartbeatAt: 50_000,
+    durationMs: 0,
+  });
+  const { resume, closed } = planWorkStartup([stray, active], 101_000);
+
+  assert.equal(resume.id, 1);
+  assert.equal(elapsedWorkMs(resume, 101_000), 99_000);
+  assert.deepEqual(closed, []);
+});
+
+test("a paused timer wins over a newer empty duplicate", () => {
+  const paused = pauseSession(
+    openSession({ id: 1, startedAt: 1_000, heartbeatAt: 61_000 }),
+    61_000,
+  );
+  const stray = openSession({
+    id: 2,
+    startedAt: 70_000,
+    heartbeatAt: 70_000,
+    durationMs: 0,
+  });
+  const { resume, closed } = planWorkStartup([paused, stray], 80_000);
+
+  assert.equal(resume.id, 1);
+  assert.equal(resume.pausedAt, 61_000);
+  assert.equal(elapsedWorkMs(resume, 80_000), 60_000);
+  assert.deepEqual(closed, []);
+});
+
+test("duplicate starts that never counted time are not logged", () => {
+  const first = openSession({
+    id: 1,
+    startedAt: 5_000,
+    heartbeatAt: 5_000,
+    durationMs: 0,
+  });
+  const second = openSession({
+    id: 2,
+    startedAt: 5_000,
+    heartbeatAt: 5_000,
+    durationMs: 0,
+  });
+  const { resume, closed } = planWorkStartup([first, second], 20_000);
+
+  assert.equal(resume.id, 2);
+  assert.deepEqual(closed, []);
+});
+
 test("elapsed work never goes negative", () => {
   assert.equal(elapsedWorkMs({ startedAt: 10_000, pausedMs: 0 }, 5_000), 0);
   assert.equal(
@@ -137,6 +250,7 @@ test("pausing freezes the clock and resuming skips the paused stretch", () => {
   const paused = pauseSession(running, 61_000);
 
   assert.equal(paused.pausedAt, 61_000);
+  assert.equal(paused.durationMs, 60_000);
   assert.equal(elapsedWorkMs(paused, 121_000), 60_000);
 
   const resumed = resumePausedSession(paused, 121_000);
