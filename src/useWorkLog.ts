@@ -1,18 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { db, type WorkSession } from "./db";
 import {
+  applyWorkSessionEdit,
+  closeSession,
   elapsedWorkMs,
   isOpenSession,
+  longSessionReminderDue,
+  MAX_WORK_TASK_LENGTH,
+  pauseSession,
   planWorkStartup,
+  resumePausedSession,
+  workSessionEditError,
+  workSessionsToCsv,
+  type WorkSessionEdit,
 } from "./workSessions";
 
-export interface ActiveWork {
-  id: number;
-  task: string;
-  startedAt: number;
-  /** Time excluded because the app was closed while the timer was running. */
-  pausedMs: number;
-}
+export type ActiveWork = WorkSession & { id: number };
 
 export interface TaskTotal {
   task: string;
@@ -27,13 +30,9 @@ async function readLog(): Promise<WorkSession[]> {
   return db.workSessions.orderBy("startedAt").reverse().toArray();
 }
 
-function toActive(session: WorkSession): ActiveWork {
-  return {
-    id: session.id!,
-    task: session.task,
-    startedAt: session.startedAt,
-    pausedMs: Math.max(0, session.pausedMs ?? 0),
-  };
+function toActive(session: WorkSession): ActiveWork | null {
+  if (session.id === undefined) return null;
+  return { ...session, id: session.id };
 }
 
 /**
@@ -86,7 +85,8 @@ export function useWorkLog() {
   }, []);
 
   useEffect(() => {
-    if (!active) return;
+    // A paused timer has nothing to count and no changing heartbeat to save.
+    if (!active || active.pausedAt !== undefined) return;
     const tick = window.setInterval(() => setNow(Date.now()), 1000);
     const beat = window.setInterval(() => {
       void db.workSessions
@@ -102,6 +102,11 @@ export function useWorkLog() {
   const start = useCallback(async (task: string) => {
     const trimmed = task.trim();
     if (!trimmed) throw new Error("Tell me what you're working on first.");
+    if (trimmed.length > MAX_WORK_TASK_LENGTH) {
+      throw new Error(
+        `Task names are limited to ${MAX_WORK_TASK_LENGTH} characters.`,
+      );
+    }
     if (starting.current) throw new Error("A timer is already starting.");
     starting.current = true;
     try {
@@ -125,7 +130,14 @@ export function useWorkLog() {
         });
       });
       setNow(startedAt);
-      setActive({ id, task: trimmed, startedAt, pausedMs: 0 });
+      setActive({
+        id,
+        task: trimmed,
+        startedAt,
+        durationMs: 0,
+        pausedMs: 0,
+        heartbeatAt: startedAt,
+      });
     } finally {
       starting.current = false;
     }
@@ -133,19 +145,93 @@ export function useWorkLog() {
 
   const stop = useCallback(async () => {
     if (!active) return 0;
-    const endedAt = Date.now();
-    const durationMs = elapsedWorkMs(active, endedAt);
+    const closed = closeSession(active, Date.now());
     await db.workSessions.update(active.id, {
-      endedAt,
-      durationMs,
-      heartbeatAt: endedAt,
+      endedAt: closed.endedAt,
+      durationMs: closed.durationMs,
+      pausedMs: closed.pausedMs ?? 0,
+      pausedAt: undefined,
+      heartbeatAt: closed.heartbeatAt,
     });
     setActive(null);
     setSessions(await readLog());
-    return durationMs;
+    return closed.durationMs;
   }, [active]);
 
+  const pause = useCallback(async () => {
+    if (!active || active.pausedAt !== undefined) return;
+    const at = Date.now();
+    const paused = pauseSession(active, at);
+    await db.workSessions.update(active.id, {
+      pausedAt: paused.pausedAt,
+      heartbeatAt: paused.heartbeatAt,
+    });
+    setNow(at);
+    setActive({ ...paused, id: active.id });
+  }, [active]);
+
+  const resume = useCallback(async () => {
+    if (!active || active.pausedAt === undefined) return;
+    const at = Date.now();
+    const resumed = resumePausedSession(active, at);
+    await db.workSessions.update(active.id, {
+      pausedMs: resumed.pausedMs,
+      pausedAt: undefined,
+      heartbeatAt: resumed.heartbeatAt,
+    });
+    setNow(at);
+    setActive({ ...resumed, id: active.id });
+  }, [active]);
+
+  const acknowledgeLongReminder = useCallback(async () => {
+    if (!active || active.longReminderAt !== undefined) return;
+    const at = Date.now();
+    await db.workSessions.update(active.id, { longReminderAt: at });
+    setActive((current) =>
+      current && current.id === active.id
+        ? { ...current, longReminderAt: at }
+        : current,
+    );
+  }, [active]);
+
+  const editSession = useCallback(
+    async (id: number, edit: WorkSessionEdit) => {
+      const problem = workSessionEditError(edit);
+      if (problem) throw new Error(problem);
+
+      const existing = await db.workSessions.get(id);
+      if (!existing) throw new Error("That session no longer exists.");
+      if (isOpenSession(existing)) {
+        throw new Error("Stop the timer before editing this session.");
+      }
+
+      await db.workSessions.put(
+        applyWorkSessionEdit({ ...existing, id }, edit),
+      );
+      setSessions(await readLog());
+    },
+    [],
+  );
+
+  const deleteSession = useCallback(async (id: number) => {
+    const existing = await db.workSessions.get(id);
+    if (!existing) throw new Error("That session no longer exists.");
+    if (isOpenSession(existing)) {
+      throw new Error("Stop the timer before deleting this session.");
+    }
+    await db.workSessions.delete(id);
+    setSessions(await readLog());
+  }, []);
+
+  const exportCsv = useCallback(
+    () => workSessionsToCsv(sessions),
+    [sessions],
+  );
+
   const elapsedMs = active ? elapsedWorkMs(active, now) : 0;
+  const longBreakDue = active
+    ? longSessionReminderDue(active, now)
+    : false;
 
   const totals = useMemo(() => {
     const grouped = new Map<string, TaskTotal>();
@@ -174,5 +260,19 @@ export function useWorkLog() {
     [sessions],
   );
 
-  return { active, elapsedMs, totals, recent, start, stop };
+  return {
+    active,
+    elapsedMs,
+    longBreakDue,
+    totals,
+    recent,
+    start,
+    stop,
+    pause,
+    resume,
+    acknowledgeLongReminder,
+    editSession,
+    deleteSession,
+    exportCsv,
+  };
 }
