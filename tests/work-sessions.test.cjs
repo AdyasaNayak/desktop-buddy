@@ -158,6 +158,19 @@ test("a timer paused before a restart stays paused without double counting", () 
   assert.equal(elapsedWorkMs(resumed, 301_000), 60_000);
 });
 
+test("pausing for sleep and resuming on wake leaves the nap out", () => {
+  const running = openSession({ startedAt: 1_000, heartbeatAt: 61_000 });
+  const sleeping = pauseSession(running, 61_000);
+  const wakeAt = 61_000 + 15 * 60_000;
+
+  // the clock is frozen for the whole nap
+  assert.equal(elapsedWorkMs(sleeping, wakeAt), 60_000);
+
+  const awake = resumePausedSession(sleeping, wakeAt);
+  assert.equal(awake.pausedMs, 15 * 60_000);
+  assert.equal(elapsedWorkMs(awake, wakeAt + 5_000), 65_000);
+});
+
 test("stopping while paused records the final paused stretch", () => {
   const paused = pauseSession(openSession(), 61_000);
   const closed = closeSession(paused, 121_000);

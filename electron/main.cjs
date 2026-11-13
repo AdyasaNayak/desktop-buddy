@@ -15,7 +15,15 @@ const { hideBuddy: hideBuddyWindow } = require("./hide-buddy.cjs");
 const { showNotification } = require("./notifications.cjs");
 const { sendToRenderer } = require("./renderer-message.cjs");
 const { notifyHiddenWaterNudge } = require("./water-reminder.cjs");
-const { notifyWindowHidden } = require("./window-visibility.cjs");
+const {
+  normalizeWorkStatus,
+  trayTooltip,
+  workStatusLabel,
+} = require("./tray-status.cjs");
+const {
+  notifyWindowHidden,
+  notifyWindowWake,
+} = require("./window-visibility.cjs");
 const {
   clampToArea,
   readWindowPosition,
@@ -30,6 +38,7 @@ let sleepTimer;
 let buddyWindow;
 let tray;
 let trayHintShown = false;
+let workStatus = null;
 let pendingWindowPosition;
 let positionSaveTimer;
 const reminderTimers = new Map();
@@ -100,7 +109,9 @@ function setBuddyBounds(window, bounds) {
 }
 
 function showBuddy() {
+  const wasSleeping = sleepTimer !== undefined;
   clearTimeout(sleepTimer);
+  sleepTimer = undefined;
   if (!buddyWindow || buddyWindow.isDestroyed()) {
     createWindow();
     return;
@@ -108,6 +119,8 @@ function showBuddy() {
   if (buddyWindow.isMinimized()) buddyWindow.restore();
   buddyWindow.show();
   buddyWindow.focus();
+  // a work timer paused for sleep starts counting again on wake
+  if (wasSleeping) notifyWindowWake(buddyWindow);
 }
 
 function showTrayHint(hasTray) {
@@ -143,21 +156,27 @@ function updateTrayMenu() {
   const visible = Boolean(
     buddyWindow && !buddyWindow.isDestroyed() && buddyWindow.isVisible(),
   );
-  tray.setToolTip(
-    visible ? "Desktop Buddy" : "Desktop Buddy — click to bring me back",
-  );
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      { label: "Show Desktop Buddy", enabled: !visible, click: showBuddy },
-      {
-        label: "Hide Desktop Buddy",
-        enabled: visible,
-        click: () => hideBuddy(),
-      },
+  tray.setToolTip(trayTooltip({ visible, work: workStatus }));
+
+  const template = [];
+  if (workStatus) {
+    // keep the running timer visible in the tray menu while the buddy hides
+    template.push(
+      { label: workStatusLabel(workStatus), enabled: false },
       { type: "separator" },
-      { label: "Quit Desktop Buddy", click: () => app.quit() },
-    ]),
+    );
+  }
+  template.push(
+    { label: "Show Desktop Buddy", enabled: !visible, click: showBuddy },
+    {
+      label: "Hide Desktop Buddy",
+      enabled: visible,
+      click: () => hideBuddy(),
+    },
+    { type: "separator" },
+    { label: "Quit Desktop Buddy", click: () => app.quit() },
   );
+  tray.setContextMenu(Menu.buildFromTemplate(template));
 }
 
 function createTray() {
@@ -231,7 +250,10 @@ function createWindow() {
   });
   window.on("closed", () => {
     clearTimeout(revealTimer);
+    clearTimeout(sleepTimer);
+    sleepTimer = undefined;
     if (buddyWindow === window) buddyWindow = undefined;
+    if (buddyWindow === undefined) workStatus = null;
     updateTrayMenu();
   });
 
@@ -265,13 +287,23 @@ ipcMain.on("sleep-window", (event, duration) => {
   if (!window || !Number.isFinite(duration)) return;
 
   clearTimeout(sleepTimer);
+  sleepTimer = undefined;
   window.hide();
   sleepTimer = setTimeout(() => {
+    sleepTimer = undefined;
     if (!window.isDestroyed()) {
       window.show();
       window.focus();
+      notifyWindowWake(window);
     }
   }, Math.max(1000, duration));
+});
+
+ipcMain.on("work-status", (event, status) => {
+  const window = BrowserWindow.fromWebContents(event.sender);
+  if (!window || window !== buddyWindow) return;
+  workStatus = normalizeWorkStatus(status);
+  updateTrayMenu();
 });
 
 ipcMain.handle("hide-app", (event) => {
