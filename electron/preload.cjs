@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld("desktopBuddy", {
   moveWindow: (x, y) => ipcRenderer.send("move-window", x, y),
   sleepWindow: (duration) => ipcRenderer.send("sleep-window", duration),
   hideApp: () => ipcRenderer.invoke("hide-app"),
+  setWorkStatus: (status) => ipcRenderer.send("work-status", status),
   setClickThrough: (ignore) => ipcRenderer.send("set-click-through", ignore),
   exitApp: () => ipcRenderer.send("exit-app"),
   setLoginItem: (openAtLogin) => ipcRenderer.sendSync("set-login-item", openAtLogin),
@@ -27,5 +28,10 @@ contextBridge.exposeInMainWorld("desktopBuddy", {
     const listener = () => callback();
     ipcRenderer.on("window-hidden", listener);
     return () => ipcRenderer.removeListener("window-hidden", listener);
+  },
+  onWindowWake: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on("window-wake", listener);
+    return () => ipcRenderer.removeListener("window-wake", listener);
   },
 });

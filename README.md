@@ -105,6 +105,12 @@ buddy shows a one-time reminder to take a short break. Log rows can be edited
 (task, start time, or minutes worked) or deleted, and **Export CSV** downloads
 the whole saved work log.
 
+Putting the buddy to **Sleep** pauses a running timer, so the nap is not
+counted as work, and the timer resumes when the buddy wakes. Hiding the buddy
+in the tray keeps the timer running; the tray tooltip and menu show the task
+and elapsed time while the buddy is out of sight. If Desktop Buddy quits while
+the buddy is sleeping, the timer comes back paused.
+
 ## Project layout
 
 - `electron/` — Electron main process, preload bridge, and timer helpers

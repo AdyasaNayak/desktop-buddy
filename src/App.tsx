@@ -41,6 +41,9 @@ declare global {
       moveWindow: (x: number, y: number) => void;
       sleepWindow: (duration: number) => void;
       hideApp: () => Promise<boolean>;
+      setWorkStatus: (
+        status: { task: string; elapsedMs: number; paused: boolean } | null,
+      ) => void;
       setClickThrough: (ignore: boolean) => void;
       exitApp: () => void;
       scheduleReminder: (id: number, text: string, remindAt: number) => void;
@@ -50,6 +53,7 @@ declare global {
       notifyWorkReminder: (notice: { title: string; body: string }) => void;
       onReminder: (callback: (id: number) => void) => () => void;
       onWindowHidden: (callback: () => void) => () => void;
+      onWindowWake: (callback: () => void) => () => void;
       setLoginItem: (openAtLogin: boolean) => boolean;
       isPackaged: boolean;
     };
@@ -82,6 +86,8 @@ export default function App() {
   const petBoxRef = useRef<Rect | null>(null);
   const welcomeTimer = useRef<number | null>(null);
   const longBreakNotified = useRef<number | null>(null);
+  // true while sleep is the reason a running timer is paused
+  const sleepPausedWork = useRef(false);
   const showSetup = profile === null;
   // true once a profile exists (or is created), no form is shown, and the pet view can mount
   const petReady = profile !== undefined && !showSetup && !renaming;
@@ -153,6 +159,20 @@ export default function App() {
   useEffect(() => {
     controlRef.current.work = work.active !== null;
   }, [work.active]);
+
+  // The tray is the only place a hidden buddy can show that a timer is still
+  // running, so keep its tooltip and menu in sync with the clock.
+  useEffect(() => {
+    window.desktopBuddy?.setWorkStatus(
+      activeWork
+        ? {
+            task: activeWork.task,
+            elapsedMs: workElapsedMs,
+            paused: activeWork.pausedAt !== undefined,
+          }
+        : null,
+    );
+  }, [activeWork, workElapsedMs]);
 
   // a water nudge takes over the bubble and plays the drinking animation
   useEffect(() => {
@@ -722,12 +742,28 @@ export default function App() {
     }
   };
 
-  const showBubble = (message: string, ms = 6000) => {
+  const showBubble = useCallback((message: string, ms = 6000) => {
     setWelcome(message);
     if (welcomeTimer.current !== null)
       window.clearTimeout(welcomeTimer.current);
     welcomeTimer.current = window.setTimeout(() => setWelcome(null), ms);
-  };
+  }, []);
+
+  // Sleep is time off, so a running timer is paused before the buddy hides and
+  // starts again when the buddy wakes (on time or early from the tray).
+  const resumeWork = work.resume;
+  useEffect(() => {
+    return window.desktopBuddy?.onWindowWake(() => {
+      if (!sleepPausedWork.current) return;
+      sleepPausedWork.current = false;
+      void resumeWork().catch((error) => {
+        console.error("Could not resume the work timer after sleep", error);
+        showBubble(
+          "could not restart your work timer. open Work mode to resume it.",
+        );
+      });
+    });
+  }, [resumeWork, showBubble]);
 
   // One break nudge per long session. The acknowledgement is saved with the
   // session so reopening the app does not repeat it for the same stretch.
@@ -756,6 +792,7 @@ export default function App() {
     longBreakDue,
     workElapsedMs,
     acknowledgeLongReminder,
+    showBubble,
   ]);
 
   // A failed hide leaves the buddy on screen instead of stranding the app, so
@@ -771,6 +808,29 @@ export default function App() {
     void bridge.hideApp().then((hidden) => {
       if (!hidden) explain();
     }, explain);
+  };
+
+  const putBuddyToSleep = (durationMs: number) => {
+    const bridge = window.desktopBuddy;
+    if (!bridge) return;
+
+    const running = work.active !== null && work.active.pausedAt === undefined;
+    const sleep = async () => {
+      if (running) {
+        try {
+          await work.pause();
+        } catch (error) {
+          console.error("Could not pause the work timer for sleep", error);
+          showBubble("i couldn't pause your work timer, so i stayed awake.");
+          return;
+        }
+      }
+      // Only a timer this sleep paused is resumed when the buddy wakes; a
+      // timer the user had already paused stays paused.
+      sleepPausedWork.current = running;
+      bridge.sleepWindow(durationMs);
+    };
+    void sleep();
   };
 
   const announce = (pet: PetType, name: string, humanName: string) => {
@@ -1141,9 +1201,7 @@ export default function App() {
                 className="btn btn--primary"
                 onClick={() => {
                   setSleepOpen(false);
-                  window.desktopBuddy?.sleepWindow(
-                    Number(sleepMinutes) * 60 * 1000,
-                  );
+                  putBuddyToSleep(Number(sleepMinutes) * 60 * 1000);
                 }}
               >
                 Sleep
