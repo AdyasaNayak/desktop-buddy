@@ -3,6 +3,12 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("desktopBuddy", {
   isPackaged: ipcRenderer.sendSync("is-packaged"),
   getWindowPosition: () => ipcRenderer.sendSync("window-position"),
+  getPointerPosition: () => ipcRenderer.sendSync("window-pointer"),
+  onPointerPosition: (callback) => {
+    const listener = (_event, point) => callback(point);
+    ipcRenderer.on("window-pointer", listener);
+    return () => ipcRenderer.removeListener("window-pointer", listener);
+  },
   setWindowMode: (mode) => ipcRenderer.send("window-mode", mode),
   moveWindow: (x, y) => ipcRenderer.send("move-window", x, y),
   sleepWindow: (duration) => ipcRenderer.send("sleep-window", duration),
@@ -33,5 +39,10 @@ contextBridge.exposeInMainWorld("desktopBuddy", {
     const listener = () => callback();
     ipcRenderer.on("window-wake", listener);
     return () => ipcRenderer.removeListener("window-wake", listener);
+  },
+  onWindowShown: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on("window-shown", listener);
+    return () => ipcRenderer.removeListener("window-shown", listener);
   },
 });

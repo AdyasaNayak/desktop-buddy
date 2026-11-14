@@ -21,4 +21,13 @@ function notifyWindowWake(window) {
   sendWindowEvent(window, "window-wake");
 }
 
-module.exports = { notifyWindowHidden, notifyWindowWake };
+/**
+ * The main process may show the pet window with click-through forced on. The
+ * renderer resets its cached state when it hears this, so its next decision is
+ * sent even when it matches the value it last applied.
+ */
+function notifyWindowShown(window) {
+  sendWindowEvent(window, "window-shown");
+}
+
+module.exports = { notifyWindowHidden, notifyWindowShown, notifyWindowWake };

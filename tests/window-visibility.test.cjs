@@ -1,6 +1,10 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { notifyWindowHidden, notifyWindowWake } = require("../electron/window-visibility.cjs");
+const {
+  notifyWindowHidden,
+  notifyWindowShown,
+  notifyWindowWake,
+} = require("../electron/window-visibility.cjs");
 
 function fakeWindow({ destroyed = false, contentsDestroyed = false } = {}) {
   const sent = [];
@@ -24,6 +28,12 @@ test("tells the renderer the buddy woke from sleep", () => {
   const window = fakeWindow();
   notifyWindowWake(window);
   assert.deepEqual(window.sent, ["window-wake"]);
+});
+
+test("tells the renderer the pet window was shown", () => {
+  const window = fakeWindow();
+  notifyWindowShown(window);
+  assert.deepEqual(window.sent, ["window-shown"]);
 });
 
 test("a wake notice is skipped when the window or renderer is gone", () => {

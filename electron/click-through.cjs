@@ -1,7 +1,6 @@
 // Forwarding mouse moves to an ignoring window is only implemented on Windows
-// and macOS. Without it the renderer would never learn that the pointer came
-// back, leaving the pet permanently unclickable on Linux, so click-through
-// stays off there and the window keeps its normal behaviour.
+// and macOS. On other platforms the main process polls the cursor instead, so
+// the renderer still learns when the pointer comes back to the pet.
 const FORWARDS_MOUSE_MOVES = new Set(["win32", "darwin"]);
 
 const ignoreState = new WeakMap();
@@ -15,15 +14,19 @@ const ignoreState = new WeakMap();
  */
 function setClickThrough(window, ignore, platform = process.platform) {
   if (!window || window.isDestroyed()) return;
-  if (!FORWARDS_MOUSE_MOVES.has(platform)) return;
 
   const next = ignore === true;
   if (ignoreState.get(window) === next) return;
   ignoreState.set(window, next);
 
   if (next) {
-    // forwarded moves keep the renderer able to notice the pointer returning
-    window.setIgnoreMouseEvents(true, { forward: true });
+    // forwarded moves keep the renderer able to notice the pointer returning;
+    // where that is unavailable the pointer tracker covers it
+    if (FORWARDS_MOUSE_MOVES.has(platform)) {
+      window.setIgnoreMouseEvents(true, { forward: true });
+    } else {
+      window.setIgnoreMouseEvents(true);
+    }
   } else {
     window.setIgnoreMouseEvents(false);
   }

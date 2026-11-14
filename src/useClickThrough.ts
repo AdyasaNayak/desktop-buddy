@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useRef, type RefObject } from "react";
 import { isInteractivePoint, type Rect } from "./clickThrough";
 
+type Point = { x: number; y: number };
+
 /**
  * Hands the transparent parts of the pet window back to the desktop.
  *
- * While click-through is on, Electron still forwards mouse moves to the
- * renderer, so the window switches back to normal as soon as the pointer
- * reaches the buddy, a bubble, or a panel. Only the pet view uses this: the
+ * The pet view starts click-through instead of waiting for the first mouse
+ * move. On Windows and macOS forwarded moves tell us when the pointer reaches
+ * the buddy; elsewhere, and after the window is shown, the main process polls
+ * the cursor and sends the same information. Only the pet view uses this: the
  * setup window is fully opaque and should keep every click.
  */
 export function useClickThrough(
@@ -20,7 +23,8 @@ export function useClickThrough(
     if (!enabled || !buddy) return;
 
     let ignoring: boolean | null = null;
-    let lastPoint: { x: number; y: number } | null = null;
+    let lastPoint: Point | null = null;
+    let pressed = false;
     let frame = 0;
 
     const apply = (ignore: boolean) => {
@@ -31,7 +35,10 @@ export function useClickThrough(
 
     const update = () => {
       frame = 0;
-      if (!lastPoint) return;
+      if (!lastPoint) {
+        apply(true);
+        return;
+      }
       apply(
         !isInteractivePoint(lastPoint.x, lastPoint.y, petBox.current, (x, y) =>
           document.elementFromPoint(x, y),
@@ -49,11 +56,21 @@ export function useClickThrough(
     };
 
     const handleLeave = (event: MouseEvent) => {
-      // a held mouse button means the buddy is being dragged; the window is
-      // following the pointer, so do not hand the drag to the desktop
-      if (event.buttons !== 0) return;
+      // A held mouse button means the buddy is being dragged; the window is
+      // following the pointer, so do not hand the drag to the desktop. A
+      // leave without buttons also clears a press whose release was missed.
+      pressed = event.buttons !== 0;
+      if (pressed) return;
       lastPoint = null;
       apply(true);
+    };
+
+    const handlePointerDown = () => {
+      pressed = true;
+    };
+
+    const handlePointerUp = () => {
+      pressed = false;
     };
 
     refreshRef.current = schedule;
@@ -65,12 +82,55 @@ export function useClickThrough(
 
     window.addEventListener("mousemove", handleMove);
     window.addEventListener("mouseleave", handleLeave);
+    window.addEventListener("blur", handlePointerUp);
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
+
+    // Covers platforms without forwarded moves and windows that were just
+    // shown while the pointer was already sitting still somewhere on screen.
+    const unsubscribePointer = buddy.onPointerPosition?.((point) => {
+      if (!point) return;
+      if (point.inside) {
+        lastPoint = { x: point.x, y: point.y };
+        schedule();
+        return;
+      }
+      if (pressed) return;
+      lastPoint = null;
+      apply(true);
+    });
+
+    // The main process forces click-through on show, before the renderer has
+    // had a chance to look at the pointer. Drop the cached value so the next
+    // update is sent even when it matches what this renderer last applied.
+    const unsubscribeShown = buddy.onWindowShown?.(() => {
+      ignoring = null;
+      apply(true);
+      schedule();
+    });
+
+    // Never leave a freshly mounted pet view blocking the desktop while it
+    // waits for the first pointer update.
+    const current = buddy.getPointerPosition?.();
+    if (current?.inside) {
+      lastPoint = { x: current.x, y: current.y };
+      update();
+    } else {
+      apply(true);
+    }
 
     return () => {
       refreshRef.current = () => {};
       observer.disconnect();
       window.removeEventListener("mousemove", handleMove);
       window.removeEventListener("mouseleave", handleLeave);
+      window.removeEventListener("blur", handlePointerUp);
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerUp);
+      unsubscribePointer?.();
+      unsubscribeShown?.();
       if (frame) cancelAnimationFrame(frame);
       // never leave the window click-through after the pet view is gone
       buddy.setClickThrough(false);

@@ -13,6 +13,10 @@ const { setLongTimeout, clearLongTimeout } = require("./long-timer.cjs");
 const { setClickThrough } = require("./click-through.cjs");
 const { hideBuddy: hideBuddyWindow } = require("./hide-buddy.cjs");
 const { showNotification } = require("./notifications.cjs");
+const {
+  createPointerTracker,
+  toWindowPoint,
+} = require("./pointer-tracker.cjs");
 const { sendToRenderer } = require("./renderer-message.cjs");
 const { notifyHiddenWaterNudge } = require("./water-reminder.cjs");
 const {
@@ -22,6 +26,7 @@ const {
 } = require("./tray-status.cjs");
 const {
   notifyWindowHidden,
+  notifyWindowShown,
   notifyWindowWake,
 } = require("./window-visibility.cjs");
 const {
@@ -36,6 +41,7 @@ const POSITION_SAVE_DELAY = 250;
 
 let sleepTimer;
 let buddyWindow;
+let pointerTracker;
 let tray;
 let trayHintShown = false;
 let workStatus = null;
@@ -60,6 +66,11 @@ function setupBounds(display) {
 
 function clampToWorkArea(bounds) {
   return clampToArea(bounds, screen.getDisplayMatching(bounds).workArea);
+}
+
+function pointerPosition(window) {
+  if (!window || window.isDestroyed()) return { x: 0, y: 0, inside: false };
+  return toWindowPoint(screen.getCursorScreenPoint(), window.getBounds());
 }
 
 function windowPositionFile() {
@@ -231,13 +242,31 @@ function createWindow() {
   // once the renderer has shown the window, the fallback is no longer needed
   // and must not undo a deliberate hide later on
   window.once("show", () => clearTimeout(revealTimer));
-  // a reload starts fully interactive; the fresh renderer asks for
-  // click-through again once it knows where the buddy is drawn
-  window.webContents.on("did-start-loading", () =>
-    setClickThrough(window, false),
-  );
+  // A reload starts on a blank, transparent page, so a pet window must not
+  // catch clicks while the fresh renderer is still loading. Setup mode stays
+  // fully interactive.
+  window.webContents.on("did-start-loading", () => {
+    setClickThrough(window, windowModes.get(window) === "pet");
+    pointerTracker?.reset();
+  });
   buddyWindow = window;
-  window.on("show", updateTrayMenu);
+  pointerTracker = createPointerTracker({
+    getWindow: () => buddyWindow,
+    getCursor: () => screen.getCursorScreenPoint(),
+    send: (point) =>
+      sendToRenderer(window.webContents, "window-pointer", point),
+  });
+  pointerTracker.start();
+  window.on("show", () => {
+    updateTrayMenu();
+    // never let a freshly shown pet block the desktop while the renderer
+    // waits to find out where the pointer is
+    if (windowModes.get(window) === "pet") {
+      setClickThrough(window, true);
+      notifyWindowShown(window);
+    }
+    pointerTracker?.reset();
+  });
   window.on("hide", () => {
     updateTrayMenu();
     // close any menu or dialog the renderer still has open, so it does not
@@ -252,6 +281,8 @@ function createWindow() {
     clearTimeout(revealTimer);
     clearTimeout(sleepTimer);
     sleepTimer = undefined;
+    pointerTracker?.stop();
+    pointerTracker = undefined;
     if (buddyWindow === window) buddyWindow = undefined;
     if (buddyWindow === undefined) workStatus = null;
     updateTrayMenu();
@@ -267,6 +298,11 @@ function createWindow() {
 ipcMain.on("window-position", (event) => {
   const window = BrowserWindow.fromWebContents(event.sender);
   event.returnValue = window?.getPosition() ?? [0, 0];
+});
+
+ipcMain.on("window-pointer", (event) => {
+  const window = BrowserWindow.fromWebContents(event.sender);
+  event.returnValue = pointerPosition(window);
 });
 
 ipcMain.on("move-window", (event, x, y) => {
@@ -351,6 +387,11 @@ ipcMain.on("window-mode", (event, mode) => {
 
   windowModes.set(window, mode);
   if (!window.isVisible()) window.show();
+  // the pet view is transparent until the renderer finds an interactive part;
+  // the setup window is opaque and keeps every click
+  setClickThrough(window, mode === "pet");
+  if (mode === "pet") notifyWindowShown(window);
+  pointerTracker?.reset();
   if (mode === "pet") savePetPosition(window);
 });
 

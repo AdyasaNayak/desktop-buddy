@@ -1,4 +1,12 @@
 export type Rect = { x: number; y: number; width: number; height: number };
+export type SpritePreview = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+};
+
+const PET_SPRITE_SIZE = 64;
 
 // Everything the pet window actually draws that should keep the mouse: the
 // pet itself is checked separately, and the rest of the 360x260 window is
@@ -15,6 +23,27 @@ const INTERACTIVE_SELECTOR = [
   ".buddy-menu",
   ".buddy-timer",
 ].join(",");
+
+/**
+ * The part of the drawn 160x160 pet box that actually contains the buddy. The
+ * sprite sheets have transparent margins, so using the full draw box would
+ * keep an invisible halo of desktop clicks from reaching the windows below.
+ * `preview` is the pet's visible body in 64x64 sprite coordinates.
+ */
+export function petHitBox(
+  petX: number,
+  petY: number,
+  drawnSize: number,
+  preview: SpritePreview,
+): Rect {
+  const scale = drawnSize / PET_SPRITE_SIZE;
+  return {
+    x: petX + preview.x * scale,
+    y: petY + preview.y * scale,
+    width: preview.w * scale,
+    height: preview.h * scale,
+  };
+}
 
 export function isInside(rect: Rect, x: number, y: number) {
   return (

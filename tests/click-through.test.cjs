@@ -40,11 +40,14 @@ test("does not re-apply a state the window already has", () => {
   assert.equal(window.calls.length, 2);
 });
 
-test("keeps the window interactive where moves cannot be forwarded", () => {
+test("lets the mouse through where moves cannot be forwarded", () => {
   const window = fakeWindow();
   setClickThrough(window, true, "linux");
   setClickThrough(window, false, "linux");
-  assert.deepEqual(window.calls, []);
+  assert.deepEqual(window.calls, [
+    { ignore: true, options: undefined },
+    { ignore: false, options: undefined },
+  ]);
 });
 
 test("ignores destroyed windows", () => {
