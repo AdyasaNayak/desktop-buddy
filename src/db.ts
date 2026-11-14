@@ -47,7 +47,9 @@ export interface WorkSession {
   task: string;
   startedAt: number;
   endedAt?: number;
+  /** Work time banked through the last checkpoint; the final total once ended. */
   durationMs: number;
+  /** Last wall-clock checkpoint for a running or paused timer. */
   heartbeatAt: number;
   /** Time excluded because the timer was paused or the app was closed. */
   pausedMs?: number;

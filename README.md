@@ -93,11 +93,14 @@ nudge leaves the saved schedule as it was.
 ## Work sessions and quitting
 
 A running work timer is saved locally. If Desktop Buddy quits or crashes while
-a timer is running, reopening it resumes that timer from its last heartbeat.
+a timer is running, reopening it resumes that timer from its last checkpoint.
 Time spent with the app closed is paused, not added to the session, and the
 Work mode panel notes that paused time is not counted. If an older version
-left duplicate timers open, the most recent one resumes and the extras are
-closed into the work log.
+left duplicate timers open, a timer that already counted work resumes (the
+most recent activity wins if several did) and the other counted sessions are
+closed into the work log; empty duplicates are discarded. Moving the system
+clock backwards does not shrink a running timer, and time already counted
+stays in the session.
 
 Use **Pause timer** for a break without stopping the session; **Resume timer**
 continues from the same elapsed time. After 90 minutes of running work, the

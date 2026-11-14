@@ -38,14 +38,21 @@ function toActive(session: WorkSession): ActiveWork | null {
 /**
  * Keeps the running task timer and the saved work log. A session that was
  * still running when the app quit or crashed is resumed from its last
- * heartbeat; time spent with the app closed is paused instead of counted.
+ * checkpoint; time spent with the app closed is paused instead of counted.
  */
 export function useWorkLog() {
   const [active, setActive] = useState<ActiveWork | null>(null);
   const [sessions, setSessions] = useState<WorkSession[]>([]);
   const [now, setNow] = useState(() => Date.now());
+  const activeRef = useRef<ActiveWork | null>(null);
+  const timerBusy = useRef(false);
   const starting = useRef(false);
   const loaded = useRef<Promise<void> | null>(null);
+
+  const setCurrentActive = useCallback((next: ActiveWork | null) => {
+    activeRef.current = next;
+    setActive(next);
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -59,8 +66,17 @@ export function useWorkLog() {
               .filter(isOpenSession)
               .toArray();
             const plan = planWorkStartup(open, Date.now());
+            const handled = new Set<number>();
+            if (plan.resume?.id !== undefined) handled.add(plan.resume.id);
             for (const session of plan.closed) {
               await db.workSessions.put(session);
+              if (session.id !== undefined) handled.add(session.id);
+            }
+            // Empty duplicates are deliberately kept out of the work log.
+            for (const session of open) {
+              if (session.id !== undefined && !handled.has(session.id)) {
+                await db.workSessions.delete(session.id);
+              }
             }
             if (plan.resume) await db.workSessions.put(plan.resume);
             return plan.resume;
@@ -71,7 +87,7 @@ export function useWorkLog() {
         setSessions(saved);
         if (resumed) {
           setNow(Date.now());
-          setActive(toActive(resumed));
+          setCurrentActive(toActive(resumed));
         }
       } catch (error) {
         console.error("Could not load the work log", error);
@@ -82,22 +98,37 @@ export function useWorkLog() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [setCurrentActive]);
 
   useEffect(() => {
     // A paused timer has nothing to count and no changing heartbeat to save.
     if (!active || active.pausedAt !== undefined) return;
     const tick = window.setInterval(() => setNow(Date.now()), 1000);
     const beat = window.setInterval(() => {
+      const current = activeRef.current;
+      if (
+        timerBusy.current ||
+        !current ||
+        current.id !== active.id ||
+        current.pausedAt !== undefined
+      ) {
+        return;
+      }
+      const at = Date.now();
+      const durationMs = elapsedWorkMs(current, at);
+      // Keep the in-memory checkpoint current as well as the saved one. If the
+      // clock moves backwards before the next beat, the timer keeps the work
+      // it has already counted instead of falling back to a wall-clock gap.
+      setCurrentActive({ ...current, durationMs, heartbeatAt: at });
       void db.workSessions
-        .update(active.id, { heartbeatAt: Date.now() })
+        .update(current.id, { heartbeatAt: at, durationMs })
         .catch((error) => console.error("Could not save work heartbeat", error));
     }, HEARTBEAT_MS);
     return () => {
       window.clearInterval(tick);
       window.clearInterval(beat);
     };
-  }, [active]);
+  }, [active, setCurrentActive]);
 
   const start = useCallback(async (task: string) => {
     const trimmed = task.trim();
@@ -130,7 +161,7 @@ export function useWorkLog() {
         });
       });
       setNow(startedAt);
-      setActive({
+      setCurrentActive({
         id,
         task: trimmed,
         startedAt,
@@ -141,58 +172,83 @@ export function useWorkLog() {
     } finally {
       starting.current = false;
     }
-  }, []);
+  }, [setCurrentActive]);
 
   const stop = useCallback(async () => {
-    if (!active) return 0;
-    const closed = closeSession(active, Date.now());
-    await db.workSessions.update(active.id, {
-      endedAt: closed.endedAt,
-      durationMs: closed.durationMs,
-      pausedMs: closed.pausedMs ?? 0,
-      pausedAt: undefined,
-      heartbeatAt: closed.heartbeatAt,
-    });
-    setActive(null);
-    setSessions(await readLog());
-    return closed.durationMs;
-  }, [active]);
+    const current = activeRef.current;
+    if (!current || timerBusy.current) return 0;
+    timerBusy.current = true;
+    try {
+      const closed = closeSession(current, Date.now());
+      await db.workSessions.update(current.id, {
+        endedAt: closed.endedAt,
+        durationMs: closed.durationMs,
+        pausedMs: closed.pausedMs ?? 0,
+        pausedAt: undefined,
+        heartbeatAt: closed.heartbeatAt,
+      });
+      setCurrentActive(null);
+      setSessions(await readLog());
+      return closed.durationMs;
+    } finally {
+      timerBusy.current = false;
+    }
+  }, [setCurrentActive]);
 
   const pause = useCallback(async () => {
-    if (!active || active.pausedAt !== undefined) return;
-    const at = Date.now();
-    const paused = pauseSession(active, at);
-    await db.workSessions.update(active.id, {
-      pausedAt: paused.pausedAt,
-      heartbeatAt: paused.heartbeatAt,
-    });
-    setNow(at);
-    setActive({ ...paused, id: active.id });
-  }, [active]);
+    const current = activeRef.current;
+    if (!current || current.pausedAt !== undefined || timerBusy.current) {
+      return;
+    }
+    timerBusy.current = true;
+    try {
+      const at = Date.now();
+      const paused = pauseSession(current, at);
+      await db.workSessions.update(current.id, {
+        durationMs: paused.durationMs,
+        pausedAt: paused.pausedAt,
+        heartbeatAt: paused.heartbeatAt,
+      });
+      setNow(at);
+      setCurrentActive({ ...paused, id: current.id });
+    } finally {
+      timerBusy.current = false;
+    }
+  }, [setCurrentActive]);
 
   const resume = useCallback(async () => {
-    if (!active || active.pausedAt === undefined) return;
-    const at = Date.now();
-    const resumed = resumePausedSession(active, at);
-    await db.workSessions.update(active.id, {
-      pausedMs: resumed.pausedMs,
-      pausedAt: undefined,
-      heartbeatAt: resumed.heartbeatAt,
-    });
-    setNow(at);
-    setActive({ ...resumed, id: active.id });
-  }, [active]);
+    const current = activeRef.current;
+    if (!current || current.pausedAt === undefined || timerBusy.current) {
+      return;
+    }
+    timerBusy.current = true;
+    try {
+      const at = Date.now();
+      const resumed = resumePausedSession(current, at);
+      await db.workSessions.update(current.id, {
+        durationMs: resumed.durationMs,
+        pausedMs: resumed.pausedMs,
+        pausedAt: undefined,
+        heartbeatAt: resumed.heartbeatAt,
+      });
+      setNow(at);
+      setCurrentActive({ ...resumed, id: current.id });
+    } finally {
+      timerBusy.current = false;
+    }
+  }, [setCurrentActive]);
 
   const acknowledgeLongReminder = useCallback(async () => {
-    if (!active || active.longReminderAt !== undefined) return;
+    const current = activeRef.current;
+    if (!current || current.longReminderAt !== undefined) return;
     const at = Date.now();
-    await db.workSessions.update(active.id, { longReminderAt: at });
-    setActive((current) =>
-      current && current.id === active.id
-        ? { ...current, longReminderAt: at }
-        : current,
-    );
-  }, [active]);
+    await db.workSessions.update(current.id, { longReminderAt: at });
+    // Another action may have paused or stopped the timer while this saved.
+    const latest = activeRef.current;
+    if (latest && latest.id === current.id) {
+      setCurrentActive({ ...latest, longReminderAt: at });
+    }
+  }, [setCurrentActive]);
 
   const editSession = useCallback(
     async (id: number, edit: WorkSessionEdit) => {
