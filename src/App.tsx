@@ -25,6 +25,7 @@ import { usePendingAction } from "./usePendingAction";
 import { useClickThrough } from "./useClickThrough";
 import { isInside, petHitBox, type Rect } from "./clickThrough";
 import {
+  PET_FRAME_SIZE,
   PETS,
   PET_PREVIEW_SIZE,
   PET_TYPES,
@@ -380,7 +381,7 @@ export default function App() {
     const ctx = canvas.getContext("2d")!;
     const pet = PETS[activePet];
     const petBoxAt = (petX: number, petY: number) =>
-      petHitBox(petX, petY, SIZE, pet.preview);
+      petHitBox(petX, petY, SIZE, pet.hitBox);
 
     const images: Record<PetState, HTMLImageElement> = {
       idle: new Image(),
@@ -615,7 +616,17 @@ export default function App() {
       const img = images[state];
       if (img.complete) {
         ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(img, frame * 64, 0, 64, 64, x, y, SIZE, SIZE);
+        ctx.drawImage(
+          img,
+          frame * PET_FRAME_SIZE,
+          0,
+          PET_FRAME_SIZE,
+          PET_FRAME_SIZE,
+          x,
+          y,
+          SIZE,
+          SIZE,
+        );
       }
     };
 

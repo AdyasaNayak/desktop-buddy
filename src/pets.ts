@@ -18,18 +18,28 @@ import dogIdle from "./assets/dog.png";
 import dogHeart from "./assets/dogheart.png";
 import dogDrink from "./assets/dogdrink.png";
 import dogWork from "./assets/dogwork.png";
+import {
+  PET_FRAME_SIZE,
+  PET_HIT_BOXES,
+  type SpriteRect,
+} from "./petSprites";
+
+export { PET_FRAME_SIZE };
 
 export type PetType = "cat" | "star" | "hamster" | "jellyfish" | "dog";
 export type PetState = "idle" | "heart" | "drink" | "work";
 
-/** Every sheet is a horizontal strip of 64×64 frames. */
+/** Every sheet is a horizontal strip of PET_FRAME_SIZE×PET_FRAME_SIZE frames. */
 export interface PetDefinition {
   label: string;
   greeting: string;
   sheets: Record<PetState, string>;
   frameCount: Record<PetState, number>;
   frameMs: Record<PetState, number>;
-  preview: { x: number; y: number; w: number; h: number };
+  /** Idle crop used by picker thumbnails. */
+  preview: SpriteRect;
+  /** Union of visible pixels across every animation sheet. */
+  hitBox: SpriteRect;
 }
 
 export const PET_TYPES: PetType[] = ["cat", "star", "hamster", "jellyfish", "dog"];
@@ -56,6 +66,7 @@ export const PETS: Record<PetType, PetDefinition> = {
     frameCount: { idle: 3, heart: 2, drink: 2, work: 3 },
     frameMs: { idle: 500, heart: 400, drink: 600, work: 300 },
     preview: { x: 6, y: 24, w: 36, h: 30 },
+    hitBox: PET_HIT_BOXES.cat,
   },
   star: {
     label: "star",
@@ -70,6 +81,7 @@ export const PETS: Record<PetType, PetDefinition> = {
     // Kept between 1 and 2 fps so the star stays calm and readable.
     frameMs: { idle: 600, heart: 700, drink: 800, work: 700 },
     preview: { x: 15, y: 18, w: 36, h: 32 },
+    hitBox: PET_HIT_BOXES.star,
   },
   hamster: {
     label: "hamster",
@@ -84,6 +96,7 @@ export const PETS: Record<PetType, PetDefinition> = {
     // Kept between 1 and 2 fps so the hamster stays calm and readable.
     frameMs: { idle: 800, heart: 700, drink: 800, work: 700 },
     preview: { x: 15, y: 19, w: 32, h: 32 },
+    hitBox: PET_HIT_BOXES.hamster,
   },
   jellyfish: {
     label: "jellyfish",
@@ -98,6 +111,7 @@ export const PETS: Record<PetType, PetDefinition> = {
     // Kept between 1 and 2 fps so the jellyfish drifts calmly.
     frameMs: { idle: 800, heart: 700, drink: 800, work: 800 },
     preview: { x: 10, y: 14, w: 44, h: 38 },
+    hitBox: PET_HIT_BOXES.jellyfish,
   },
   dog: {
     label: "dog",
@@ -112,6 +126,7 @@ export const PETS: Record<PetType, PetDefinition> = {
     // Kept between 1 and 2 fps so the dog stays calm and readable.
     frameMs: { idle: 800, heart: 700, drink: 800, work: 700 },
     preview: { x: 14, y: 20, w: 40, h: 30 },
+    hitBox: PET_HIT_BOXES.dog,
   },
 };
 

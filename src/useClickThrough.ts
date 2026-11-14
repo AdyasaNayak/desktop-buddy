@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useRef, type RefObject } from "react";
-import { isInteractivePoint, type Rect } from "./clickThrough";
-
-type Point = { x: number; y: number };
+import {
+  afterPointerLeft,
+  afterWindowShown,
+  clickThroughFor,
+  INITIAL_CLICK_THROUGH_STATE,
+  isInteractivePoint,
+  withClickThrough,
+  withPointer,
+  withPressed,
+  withRemotePointer,
+  type Rect,
+} from "./clickThrough";
 
 /**
  * Hands the transparent parts of the pet window back to the desktop.
@@ -22,26 +31,23 @@ export function useClickThrough(
     const buddy = window.desktopBuddy;
     if (!enabled || !buddy) return;
 
-    let ignoring: boolean | null = null;
-    let lastPoint: Point | null = null;
-    let pressed = false;
+    let state = INITIAL_CLICK_THROUGH_STATE;
     let frame = 0;
 
     const apply = (ignore: boolean) => {
-      if (ignoring === ignore) return;
-      ignoring = ignore;
+      const next = withClickThrough(state, ignore);
+      if (next === state) return;
+      state = next;
       buddy.setClickThrough(ignore);
     };
 
     const update = () => {
       frame = 0;
-      if (!lastPoint) {
-        apply(true);
-        return;
-      }
       apply(
-        !isInteractivePoint(lastPoint.x, lastPoint.y, petBox.current, (x, y) =>
-          document.elementFromPoint(x, y),
+        clickThroughFor(state, (point) =>
+          isInteractivePoint(point.x, point.y, petBox.current, (x, y) =>
+            document.elementFromPoint(x, y),
+          ),
         ),
       );
     };
@@ -51,26 +57,21 @@ export function useClickThrough(
     };
 
     const handleMove = (event: MouseEvent) => {
-      lastPoint = { x: event.clientX, y: event.clientY };
+      state = withPointer(state, { x: event.clientX, y: event.clientY });
       schedule();
     };
 
     const handleLeave = (event: MouseEvent) => {
-      // A held mouse button means the buddy is being dragged; the window is
-      // following the pointer, so do not hand the drag to the desktop. A
-      // leave without buttons also clears a press whose release was missed.
-      pressed = event.buttons !== 0;
-      if (pressed) return;
-      lastPoint = null;
-      apply(true);
+      state = afterPointerLeft(state, event.buttons);
+      if (state.point === null) apply(true);
     };
 
     const handlePointerDown = () => {
-      pressed = true;
+      state = withPressed(state, true);
     };
 
     const handlePointerUp = () => {
-      pressed = false;
+      state = withPressed(state, false);
     };
 
     refreshRef.current = schedule;
@@ -91,13 +92,12 @@ export function useClickThrough(
     // shown while the pointer was already sitting still somewhere on screen.
     const unsubscribePointer = buddy.onPointerPosition?.((point) => {
       if (!point) return;
+      state = withRemotePointer(state, point);
       if (point.inside) {
-        lastPoint = { x: point.x, y: point.y };
         schedule();
         return;
       }
-      if (pressed) return;
-      lastPoint = null;
+      if (state.pressed) return;
       apply(true);
     });
 
@@ -105,7 +105,7 @@ export function useClickThrough(
     // had a chance to look at the pointer. Drop the cached value so the next
     // update is sent even when it matches what this renderer last applied.
     const unsubscribeShown = buddy.onWindowShown?.(() => {
-      ignoring = null;
+      state = afterWindowShown(state);
       apply(true);
       schedule();
     });
@@ -114,7 +114,7 @@ export function useClickThrough(
     // waits for the first pointer update.
     const current = buddy.getPointerPosition?.();
     if (current?.inside) {
-      lastPoint = { x: current.x, y: current.y };
+      state = withRemotePointer(state, current);
       update();
     } else {
       apply(true);

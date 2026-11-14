@@ -6,8 +6,9 @@ contextBridge.exposeInMainWorld("desktopBuddy", {
   getPointerPosition: () => ipcRenderer.sendSync("window-pointer"),
   onPointerPosition: (callback) => {
     const listener = (_event, point) => callback(point);
-    ipcRenderer.on("window-pointer", listener);
-    return () => ipcRenderer.removeListener("window-pointer", listener);
+    ipcRenderer.on("window-pointer-changed", listener);
+    return () =>
+      ipcRenderer.removeListener("window-pointer-changed", listener);
   },
   setWindowMode: (mode) => ipcRenderer.send("window-mode", mode),
   moveWindow: (x, y) => ipcRenderer.send("move-window", x, y),

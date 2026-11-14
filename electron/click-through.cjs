@@ -32,4 +32,4 @@ function setClickThrough(window, ignore, platform = process.platform) {
   }
 }
 
-module.exports = { setClickThrough };
+module.exports = { FORWARDS_MOUSE_MOVES, setClickThrough };

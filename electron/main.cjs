@@ -10,7 +10,7 @@ const {
 } = require("electron");
 const path = require("node:path");
 const { setLongTimeout, clearLongTimeout } = require("./long-timer.cjs");
-const { setClickThrough } = require("./click-through.cjs");
+const { FORWARDS_MOUSE_MOVES, setClickThrough } = require("./click-through.cjs");
 const { hideBuddy: hideBuddyWindow } = require("./hide-buddy.cjs");
 const { showNotification } = require("./notifications.cjs");
 const {
@@ -71,6 +71,34 @@ function clampToWorkArea(bounds) {
 function pointerPosition(window) {
   if (!window || window.isDestroyed()) return { x: 0, y: 0, inside: false };
   return toWindowPoint(screen.getCursorScreenPoint(), window.getBounds());
+}
+
+function sendPointerPosition(window = buddyWindow) {
+  if (!window || window.isDestroyed()) return;
+  sendToRenderer(
+    window.webContents,
+    "window-pointer-changed",
+    pointerPosition(window),
+  );
+}
+
+// Forwarded moves already tell the renderer where the pointer is, so polling
+// is only needed where they are unavailable. It also only runs for the pet
+// view: setup is opaque and hidden windows need no pointer updates.
+function startPointerPolling(window = buddyWindow) {
+  if (FORWARDS_MOUSE_MOVES.has(process.platform)) return;
+  if (!window || window.isDestroyed() || !window.isVisible()) return;
+  if (windowModes.get(window) !== "pet") return;
+  pointerTracker?.start();
+}
+
+function announcePetWindow(window) {
+  // Forwarded moves may not arrive until the pointer moves again, so send the
+  // current position immediately after the pet becomes visible.
+  sendPointerPosition(window);
+  setClickThrough(window, true);
+  notifyWindowShown(window);
+  startPointerPolling(window);
 }
 
 function windowPositionFile() {
@@ -254,23 +282,19 @@ function createWindow() {
     getWindow: () => buddyWindow,
     getCursor: () => screen.getCursorScreenPoint(),
     send: (point) =>
-      sendToRenderer(window.webContents, "window-pointer", point),
+      sendToRenderer(window.webContents, "window-pointer-changed", point),
   });
-  pointerTracker.start();
   window.on("show", () => {
     updateTrayMenu();
     // never let a freshly shown pet block the desktop while the renderer
     // waits to find out where the pointer is
-    if (windowModes.get(window) === "pet") {
-      setClickThrough(window, true);
-      notifyWindowShown(window);
-    }
-    pointerTracker?.reset();
+    if (windowModes.get(window) === "pet") announcePetWindow(window);
   });
   window.on("hide", () => {
+    pointerTracker?.stop();
     updateTrayMenu();
     // close any menu or dialog the renderer still has open, so it does not
-    // wait behind a hidden window and pop up again on wake
+    // wait behind a hidden window and pop up again when it wakes
     notifyWindowHidden(window);
   });
   window.on("close", () => {
@@ -385,12 +409,19 @@ ipcMain.on("window-mode", (event, mode) => {
     );
   }
 
+  const wasVisible = window.isVisible();
   windowModes.set(window, mode);
-  if (!window.isVisible()) window.show();
+  if (!wasVisible) window.show();
   // the pet view is transparent until the renderer finds an interactive part;
   // the setup window is opaque and keeps every click
   setClickThrough(window, mode === "pet");
-  if (mode === "pet") notifyWindowShown(window);
+  if (mode === "pet") {
+    // the show event covers a hidden window; this covers setup -> pet
+    if (wasVisible) announcePetWindow(window);
+    startPointerPolling(window);
+  } else {
+    pointerTracker?.stop();
+  }
   pointerTracker?.reset();
   if (mode === "pet") savePetPosition(window);
 });
