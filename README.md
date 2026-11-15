@@ -1,8 +1,8 @@
 # Desktop Buddy
 
-A small always-on-top desktop companion for Windows. It keeps you company
-while you work, nudges you to drink water, tracks work sessions, and shows the
-reminders you set from its menu.
+A small desktop companion for Windows that stays above other windows by
+default. It keeps you company while you work, nudges you to drink water,
+tracks work sessions, and shows the reminders you set from its menu.
 
 ## Requirements
 
@@ -33,6 +33,13 @@ Notification API, or an alert when notification permission is not granted.
 | `npm run dist` | Build the Windows installer into `release/` |
 | `npm test` | Node test suite under `tests/` |
 | `npm run lint` | Oxlint |
+
+## Always on top
+
+The buddy stays above other windows by default. Click the **on top** pill in
+the top-right corner, or uncheck **Always on top** in the tray menu, when a
+full-screen game or video should cover it. The choice is saved and restored on
+the next launch.
 
 ## Reminders and quitting
 

@@ -34,6 +34,10 @@ const {
   readWindowPosition,
   writeWindowPosition,
 } = require("./window-position.cjs");
+const {
+  readAlwaysOnTop,
+  writeAlwaysOnTop,
+} = require("./window-preferences.cjs");
 
 const PET_WINDOW = { width: 360, height: 260 };
 const SETUP_WINDOW = { width: 460, height: 600 };
@@ -47,6 +51,7 @@ let trayHintShown = false;
 let workStatus = null;
 let pendingWindowPosition;
 let positionSaveTimer;
+let alwaysOnTop = true;
 const reminderTimers = new Map();
 const windowModes = new WeakMap();
 const petWindowBounds = new WeakMap();
@@ -103,6 +108,26 @@ function announcePetWindow(window) {
 
 function windowPositionFile() {
   return path.join(app.getPath("userData"), "window-position.json");
+}
+
+function windowPreferencesFile() {
+  return path.join(app.getPath("userData"), "window-preferences.json");
+}
+
+function loadAlwaysOnTop() {
+  alwaysOnTop = readAlwaysOnTop(windowPreferencesFile());
+}
+
+function setBuddyAlwaysOnTop(window, enabled) {
+  alwaysOnTop = enabled === true;
+  if (window && !window.isDestroyed()) {
+    window.setAlwaysOnTop(alwaysOnTop);
+    sendToRenderer(window.webContents, "always-on-top-changed", alwaysOnTop);
+  }
+  if (!writeAlwaysOnTop(windowPreferencesFile(), alwaysOnTop)) {
+    console.error("Could not save the always-on-top setting");
+  }
+  updateTrayMenu();
 }
 
 function loadPetPosition() {
@@ -212,6 +237,12 @@ function updateTrayMenu() {
       enabled: visible,
       click: () => hideBuddy(),
     },
+    {
+      label: "Always on top",
+      type: "checkbox",
+      checked: alwaysOnTop,
+      click: (item) => setBuddyAlwaysOnTop(buddyWindow, item.checked),
+    },
     { type: "separator" },
     { label: "Quit Desktop Buddy", click: () => app.quit() },
   );
@@ -247,7 +278,7 @@ function createWindow() {
     show: false,
     transparent: true,
     frame: false,
-    alwaysOnTop: true,
+    alwaysOnTop,
     resizable: false,
     hasShadow: false,
     backgroundColor: "#00000000",
@@ -327,6 +358,16 @@ ipcMain.on("window-position", (event) => {
 ipcMain.on("window-pointer", (event) => {
   const window = BrowserWindow.fromWebContents(event.sender);
   event.returnValue = pointerPosition(window);
+});
+
+ipcMain.on("get-always-on-top", (event) => {
+  event.returnValue = alwaysOnTop;
+});
+
+ipcMain.on("set-always-on-top", (event, enabled) => {
+  const window = BrowserWindow.fromWebContents(event.sender);
+  if (!window || window !== buddyWindow || typeof enabled !== "boolean") return;
+  setBuddyAlwaysOnTop(window, enabled);
 });
 
 ipcMain.on("move-window", (event, x, y) => {
@@ -527,6 +568,7 @@ if (!app.requestSingleInstanceLock()) {
     if (process.platform === "win32") {
       app.setAppUserModelId("com.adyasa.desktopbuddy");
     }
+    loadAlwaysOnTop();
     createTray();
     createWindow();
 

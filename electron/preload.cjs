@@ -4,6 +4,15 @@ contextBridge.exposeInMainWorld("desktopBuddy", {
   isPackaged: ipcRenderer.sendSync("is-packaged"),
   getWindowPosition: () => ipcRenderer.sendSync("window-position"),
   getPointerPosition: () => ipcRenderer.sendSync("window-pointer"),
+  getAlwaysOnTop: () => ipcRenderer.sendSync("get-always-on-top"),
+  setAlwaysOnTop: (enabled) =>
+    ipcRenderer.send("set-always-on-top", enabled),
+  onAlwaysOnTopChanged: (callback) => {
+    const listener = (_event, enabled) => callback(enabled);
+    ipcRenderer.on("always-on-top-changed", listener);
+    return () =>
+      ipcRenderer.removeListener("always-on-top-changed", listener);
+  },
   onPointerPosition: (callback) => {
     const listener = (_event, point) => callback(point);
     ipcRenderer.on("window-pointer-changed", listener);

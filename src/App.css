@@ -557,6 +557,51 @@
   color: #8a3b2e;
 }
 
+.buddy-pin {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  padding: 2px 5px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--paper-raised);
+  color: var(--bark-soft);
+  font-family: var(--font-body);
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+  box-shadow: 0 2px 0 var(--line);
+}
+
+.buddy-pin:hover {
+  border-color: var(--bark-soft);
+  background: var(--sun-soft);
+  color: var(--bark);
+}
+
+.buddy-pin__dot {
+  width: 6px;
+  height: 6px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+}
+
+.buddy-pin[aria-pressed="true"] {
+  border-color: var(--leaf-deep);
+  background: var(--sun-soft);
+  color: var(--leaf-deep);
+}
+
+.buddy-pin[aria-pressed="true"] .buddy-pin__dot {
+  background: currentColor;
+}
+
 .buddy-menu__error {
   grid-column: 1 / -1;
   margin: 0;
