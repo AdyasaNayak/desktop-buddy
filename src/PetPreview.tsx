@@ -1,4 +1,4 @@
-import { PETS, type PetType } from "./pets";
+import { PET_FRAME_SIZE, PETS, type PetType } from "./pets";
 
 export function PetPreview({
   pet,
@@ -22,13 +22,13 @@ export function PetPreview({
         className="pet-preview"
         aria-hidden="true"
         style={{
-          width: 64 * scale,
-          height: 64 * scale,
+          width: PET_FRAME_SIZE * scale,
+          height: PET_FRAME_SIZE * scale,
           marginLeft: -win.x * scale,
           marginTop: -win.y * scale,
           backgroundImage: `url(${definition.sheets.idle})`,
-          backgroundSize: `${64 * scale * frames}px ${64 * scale}px`,
-          ["--pet-preview-frame-width" as string]: `${64 * scale}px`,
+          backgroundSize: `${PET_FRAME_SIZE * scale * frames}px ${PET_FRAME_SIZE * scale}px`,
+          ["--pet-preview-frame-width" as string]: `${PET_FRAME_SIZE * scale}px`,
           ["--pet-preview-frames" as string]: frames,
           ["--pet-preview-duration" as string]: `${(frames * definition.frameMs.idle) / 1000}s`,
         }}

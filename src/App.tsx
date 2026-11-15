@@ -23,8 +23,9 @@ import type { WaterNudgeNotice } from "./waterMessages";
 import type { WaterSettings } from "./waterOptions";
 import { usePendingAction } from "./usePendingAction";
 import { useClickThrough } from "./useClickThrough";
-import type { Rect } from "./clickThrough";
+import { isInside, petHitBox, type Rect } from "./clickThrough";
 import {
+  PET_FRAME_SIZE,
   PETS,
   PET_PREVIEW_SIZE,
   PET_TYPES,
@@ -37,6 +38,10 @@ declare global {
   interface Window {
     desktopBuddy?: {
       getWindowPosition: () => [number, number];
+      getPointerPosition: () => { x: number; y: number; inside: boolean };
+      onPointerPosition: (
+        callback: (point: { x: number; y: number; inside: boolean }) => void,
+      ) => () => void;
       setWindowMode: (mode: "setup" | "pet") => void;
       moveWindow: (x: number, y: number) => void;
       sleepWindow: (duration: number) => void;
@@ -54,6 +59,7 @@ declare global {
       onReminder: (callback: (id: number) => void) => () => void;
       onWindowHidden: (callback: () => void) => () => void;
       onWindowWake: (callback: () => void) => () => void;
+      onWindowShown: (callback: () => void) => () => void;
       setLoginItem: (openAtLogin: boolean) => boolean;
       isPackaged: boolean;
     };
@@ -374,6 +380,8 @@ export default function App() {
     if (!canvas) return;
     const ctx = canvas.getContext("2d")!;
     const pet = PETS[activePet];
+    const petBoxAt = (petX: number, petY: number) =>
+      petHitBox(petX, petY, SIZE, pet.hitBox);
 
     const images: Record<PetState, HTMLImageElement> = {
       idle: new Image(),
@@ -402,7 +410,10 @@ export default function App() {
       ? Math.max(0, Math.min(savedPosition.x, window.innerWidth - SIZE))
       : window.innerWidth / 2 - SIZE / 2;
     let y = savedPosition ? Math.min(savedPosition.y, groundY) : groundY;
-    petBoxRef.current = { x, y, width: SIZE, height: SIZE };
+    petBoxRef.current = petBoxAt(x, y);
+    // the click-through hook mounted before this box existed, so let it
+    // re-check where the pointer is now that the pet can be hit-tested
+    refreshClickThrough();
     let targetX = x;
     let isWalking = false;
     let isDragging = false;
@@ -436,7 +447,7 @@ export default function App() {
       const rect = canvas.getBoundingClientRect();
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
-      isHovering = mx >= x && mx <= x + SIZE && my >= y && my <= y + SIZE;
+      isHovering = isInside(petBoxAt(x, y), mx, my);
       canvas.style.cursor = isHovering ? "pointer" : "default";
     };
     const handleMouseLeave = () => {
@@ -447,8 +458,7 @@ export default function App() {
       const rect = canvas.getBoundingClientRect();
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
-      if (mx >= x && mx <= x + SIZE && my >= y && my <= y + SIZE) {
-        console.log("petted 💜");
+      if (isInside(petBoxAt(x, y), mx, my)) {
         y = groundY - 20;
         if (petTimeout) clearTimeout(petTimeout);
         petTimeout = setTimeout(() => (y = groundY), 150);
@@ -458,7 +468,7 @@ export default function App() {
       const rect = canvas.getBoundingClientRect();
       const mx = clientX - rect.left;
       const my = clientY - rect.top;
-      return mx >= x && mx <= x + SIZE && my >= y && my <= y + SIZE;
+      return isInside(petBoxAt(x, y), mx, my);
     };
     const handlePointerDown = (e: PointerEvent) => {
       if (!isPetAt(e.clientX, e.clientY)) return;
@@ -583,8 +593,15 @@ export default function App() {
       y = Math.max(0, Math.min(y, groundY));
       positionRef.current = { x, y };
       const previousBox = petBoxRef.current;
-      if (!previousBox || previousBox.x !== x || previousBox.y !== y) {
-        petBoxRef.current = { x, y, width: SIZE, height: SIZE };
+      const nextBox = petBoxAt(x, y);
+      if (
+        !previousBox ||
+        previousBox.x !== nextBox.x ||
+        previousBox.y !== nextBox.y ||
+        previousBox.width !== nextBox.width ||
+        previousBox.height !== nextBox.height
+      ) {
+        petBoxRef.current = nextBox;
         // the buddy may have walked under a pointer that is not moving
         refreshClickThrough();
       }
@@ -599,7 +616,17 @@ export default function App() {
       const img = images[state];
       if (img.complete) {
         ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(img, frame * 64, 0, 64, 64, x, y, SIZE, SIZE);
+        ctx.drawImage(
+          img,
+          frame * PET_FRAME_SIZE,
+          0,
+          PET_FRAME_SIZE,
+          PET_FRAME_SIZE,
+          x,
+          y,
+          SIZE,
+          SIZE,
+        );
       }
     };
 
