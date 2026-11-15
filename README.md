@@ -22,6 +22,11 @@ preview only the renderer in a browser, run `npm run dev` and open
 <http://localhost:5173>. In browser mode reminders fall back to the browser
 Notification API, or an alert when notification permission is not granted.
 
+Drag the buddy to move it. Its position is saved when you quit and restored
+next time, including which monitor it was on. Dragging near a screen edge snaps
+the window flush against it, and if a monitor is unplugged or changes size, the
+buddy is moved back onto an available screen instead of being left off-screen.
+
 ## Scripts
 
 | Command | What it does |

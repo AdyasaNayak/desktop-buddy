@@ -31,7 +31,10 @@ const {
 } = require("./window-visibility.cjs");
 const {
   clampToArea,
+  displayForPoint,
   readWindowPosition,
+  resolveWindowPosition,
+  snapToArea,
   writeWindowPosition,
 } = require("./window-position.cjs");
 
@@ -64,8 +67,31 @@ function setupBounds(display) {
   };
 }
 
-function clampToWorkArea(bounds) {
-  return clampToArea(bounds, screen.getDisplayMatching(bounds).workArea);
+function displayForBounds(bounds, preferredId) {
+  const point = {
+    x: bounds.x + bounds.width / 2,
+    y: bounds.y + bounds.height / 2,
+  };
+  // The centre, not the current display, decides where a drag can land. Using
+  // the window's current monitor would clamp it before it could ever cross a
+  // monitor boundary.
+  return (
+    displayForPoint(screen.getAllDisplays(), point, preferredId) ??
+    screen.getDisplayNearestPoint({
+      x: Math.round(point.x),
+      y: Math.round(point.y),
+    })
+  );
+}
+
+function clampToWorkArea(bounds, preferredId) {
+  return clampToArea(bounds, displayForBounds(bounds, preferredId).workArea);
+}
+
+function fitToWorkArea(bounds, snap = false) {
+  const area = displayForBounds(bounds).workArea;
+  const clamped = clampToArea(bounds, area);
+  return snap ? snapToArea(clamped, area) : clamped;
 }
 
 function pointerPosition(window) {
@@ -108,9 +134,9 @@ function windowPositionFile() {
 function loadPetPosition() {
   const saved = readWindowPosition(windowPositionFile());
   if (!saved) return null;
-  // the monitor the buddy was left on may be gone since the last run
-  const bounds = clampToWorkArea({ ...PET_WINDOW, ...saved });
-  return { x: bounds.x, y: bounds.y };
+  // prefer the monitor the buddy was left on, then fall back to the nearest
+  // one when that monitor is gone or the layout changed
+  return resolveWindowPosition(saved, screen.getAllDisplays(), PET_WINDOW);
 }
 
 function flushWindowPosition() {
@@ -132,7 +158,11 @@ function savePetPosition(window, bounds = window.getBounds()) {
   // the setup/rename window is centered on purpose, so only remember the pet
   if (windowModes.get(window) !== "pet") return;
 
-  pendingWindowPosition = { x: bounds.x, y: bounds.y };
+  pendingWindowPosition = {
+    x: bounds.x,
+    y: bounds.y,
+    displayId: displayForBounds(bounds).id,
+  };
   // coalesce the many moves that arrive during a drag into occasional writes
   if (positionSaveTimer) return;
   positionSaveTimer = setTimeout(flushWindowPosition, POSITION_SAVE_DELAY);
@@ -145,6 +175,23 @@ function setBuddyBounds(window, bounds) {
   if (!wasResizable) window.setResizable(true);
   window.setBounds(bounds, false);
   if (!wasResizable) window.setResizable(false);
+}
+
+// A monitor can disappear or change resolution while the buddy is running.
+// Bring it back onto an available work area instead of leaving it off screen.
+function keepWindowOnScreen() {
+  const window = buddyWindow;
+  if (!window || window.isDestroyed()) return;
+
+  const bounds = window.getBounds();
+  const fitted = clampToWorkArea(bounds);
+  if (fitted.x !== bounds.x || fitted.y !== bounds.y) {
+    setBuddyBounds(window, fitted);
+  }
+  if (windowModes.get(window) === "pet") {
+    savePetPosition(window, fitted);
+    flushWindowPosition();
+  }
 }
 
 function showBuddy() {
@@ -333,11 +380,14 @@ ipcMain.on("move-window", (event, x, y) => {
   const window = BrowserWindow.fromWebContents(event.sender);
   if (!window || !Number.isFinite(x) || !Number.isFinite(y)) return;
 
-  const bounds = clampToWorkArea({
-    ...window.getBounds(),
-    x: Math.round(x),
-    y: Math.round(y),
-  });
+  const bounds = fitToWorkArea(
+    {
+      ...window.getBounds(),
+      x: Math.round(x),
+      y: Math.round(y),
+    },
+    true,
+  );
   window.setPosition(bounds.x, bounds.y);
   savePetPosition(window, bounds);
 });
@@ -529,6 +579,13 @@ if (!app.requestSingleInstanceLock()) {
     }
     createTray();
     createWindow();
+    for (const event of [
+      "display-added",
+      "display-removed",
+      "display-metrics-changed",
+    ]) {
+      screen.on(event, keepWindowOnScreen);
+    }
 
     app.on("activate", showBuddy);
   });
