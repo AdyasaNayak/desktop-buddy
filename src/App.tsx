@@ -39,6 +39,11 @@ declare global {
     desktopBuddy?: {
       getWindowPosition: () => [number, number];
       getPointerPosition: () => { x: number; y: number; inside: boolean };
+      getAlwaysOnTop: () => boolean;
+      setAlwaysOnTop: (enabled: boolean) => void;
+      onAlwaysOnTopChanged: (
+        callback: (enabled: boolean) => void,
+      ) => () => void;
       onPointerPosition: (
         callback: (point: { x: number; y: number; inside: boolean }) => void,
       ) => () => void;
@@ -71,6 +76,9 @@ const SIZE = 160; // draw size - bigger = larger buddy
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const controlRef = useRef({ drinkLeft: 0, work: false });
+  const [alwaysOnTop, setAlwaysOnTop] = useState(
+    () => window.desktopBuddy?.getAlwaysOnTop() ?? true,
+  );
   const [menuOpen, setMenuOpen] = useState(false);
   const [waterOpen, setWaterOpen] = useState(false);
   const [workOpen, setWorkOpen] = useState(false);
@@ -154,6 +162,11 @@ export default function App() {
   useEffect(() => {
     return window.desktopBuddy?.onWindowHidden(closeOverlays);
   }, [closeOverlays]);
+
+  // The tray menu can change this while the buddy menu is closed.
+  useEffect(() => {
+    return window.desktopBuddy?.onAlwaysOnTopChanged(setAlwaysOnTop);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -822,6 +835,12 @@ export default function App() {
     showBubble,
   ]);
 
+  const toggleAlwaysOnTop = () => {
+    const next = !alwaysOnTop;
+    setAlwaysOnTop(next);
+    window.desktopBuddy?.setAlwaysOnTop(next);
+  };
+
   // A failed hide leaves the buddy on screen instead of stranding the app, so
   // say why rather than making the button look broken.
   const hideBuddy = () => {
@@ -1011,6 +1030,24 @@ export default function App() {
   return (
     <div style={{ position: "relative", width: "100vw", height: "100vh" }}>
       <canvas ref={canvasRef} style={{ display: "block" }} />
+
+      {!menuOpen && (
+        <button
+          type="button"
+          className="buddy-pin"
+          aria-label="Always on top"
+          aria-pressed={alwaysOnTop}
+          title={
+            alwaysOnTop
+              ? "Always on top is on. Turn it off to let full-screen apps and games cover the buddy."
+              : "Always on top is off. Turn it on to keep the buddy above other windows."
+          }
+          onClick={toggleAlwaysOnTop}
+        >
+          <span className="buddy-pin__dot" aria-hidden="true" />
+          on top
+        </button>
+      )}
 
       {(water.prompt || welcome) && (
         <div
