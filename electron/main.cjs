@@ -41,6 +41,16 @@ const {
   readAlwaysOnTop,
   writeAlwaysOnTop,
 } = require("./window-preferences.cjs");
+const {
+  DEFAULT_LAUNCH_HIDDEN,
+  applyLoginItemSettings,
+  loginItemIsEnabled,
+  loginItemWillLaunch,
+  readLaunchHidden,
+  reconcileLoginItem,
+  wasLaunchedHidden,
+  writeLaunchHidden,
+} = require("./startup.cjs");
 
 const PET_WINDOW = { width: 360, height: 260 };
 const SETUP_WINDOW = { width: 460, height: 600 };
@@ -55,6 +65,8 @@ let workStatus = null;
 let pendingWindowPosition;
 let positionSaveTimer;
 let alwaysOnTop = true;
+let launchHidden = DEFAULT_LAUNCH_HIDDEN;
+let startHiddenThisRun = false;
 const reminderTimers = new Map();
 const windowModes = new WeakMap();
 const petWindowBounds = new WeakMap();
@@ -140,8 +152,35 @@ function windowPreferencesFile() {
   return path.join(app.getPath("userData"), "window-preferences.json");
 }
 
+function startupPreferencesFile() {
+  return path.join(app.getPath("userData"), "startup-preferences.json");
+}
+
 function loadAlwaysOnTop() {
   alwaysOnTop = readAlwaysOnTop(windowPreferencesFile());
+}
+
+function loadLaunchHidden() {
+  launchHidden = readLaunchHidden(startupPreferencesFile());
+}
+
+function saveLaunchHidden(enabled) {
+  const previous = launchHidden;
+  launchHidden = enabled === true;
+  if (!writeLaunchHidden(startupPreferencesFile(), launchHidden)) {
+    console.error("Could not save the launch-hidden setting");
+  }
+  if (app.isPackaged) {
+    // Keep an existing login item in sync even when it was registered by an
+    // older version that did not know about the hidden argument.
+    const openAtLogin = loginItemIsEnabled(app, previous);
+    applyLoginItemSettings(app, {
+      openAtLogin,
+      launchHidden,
+      enabled: openAtLogin ? loginItemWillLaunch(app, previous) : true,
+    });
+  }
+  updateTrayMenu();
 }
 
 function setBuddyAlwaysOnTop(window, enabled) {
@@ -236,6 +275,7 @@ function keepWindowOnScreen() {
 }
 
 function showBuddy() {
+  startHiddenThisRun = false;
   const wasSleeping = sleepTimer !== undefined;
   clearTimeout(sleepTimer);
   sleepTimer = undefined;
@@ -306,6 +346,12 @@ function updateTrayMenu() {
       checked: alwaysOnTop,
       click: (item) => setBuddyAlwaysOnTop(buddyWindow, item.checked),
     },
+    {
+      label: "Launch hidden at login",
+      type: "checkbox",
+      checked: launchHidden,
+      click: (item) => saveLaunchHidden(item.checked),
+    },
     { type: "separator" },
     { label: "Quit Desktop Buddy", click: () => app.quit() },
   );
@@ -357,9 +403,13 @@ function createWindow() {
 
   // The renderer picks the window size once it knows whether this is a first
   // launch. Show the window anyway if that never arrives (for example a
-  // renderer crash), so the app can't start invisible.
+  // renderer crash), so a normal launch can't start invisible.
   const revealTimer = setTimeout(() => {
-    if (!window.isDestroyed() && !window.isVisible()) window.show();
+    // A login launch deliberately stays out of the way. Opening the buddy from
+    // the tray clears the flag, so the fallback still applies then.
+    if (!startHiddenThisRun && !window.isDestroyed() && !window.isVisible()) {
+      window.show();
+    }
   }, 4000);
   // once the renderer has shown the window, the fallback is no longer needed
   // and must not undo a deliberate hide later on
@@ -382,6 +432,7 @@ function createWindow() {
   // some platforms only report the final position at the end of a drag
   window.on("moved", () => keepWindowInWorkArea(window));
   window.on("show", () => {
+    startHiddenThisRun = false;
     updateTrayMenu();
     // never let a freshly shown pet block the desktop while the renderer
     // waits to find out where the pointer is
@@ -495,6 +546,8 @@ ipcMain.on("window-mode", (event, mode) => {
   const bounds = window.getBounds();
   const previousMode = windowModes.get(window);
   if (mode === "setup") {
+    // a first-run login needs the setup card on screen, not a hidden window
+    startHiddenThisRun = false;
     // the setup window is opaque, so it must catch every click
     setClickThrough(window, false);
     // remember where a visible buddy was so renaming can put it back
@@ -527,7 +580,8 @@ ipcMain.on("window-mode", (event, mode) => {
   }
 
   const wasVisible = window.isVisible();
-  if (!wasVisible) window.show();
+  // A login launch stays in the tray until the user asks for the buddy.
+  if (!wasVisible && !(mode === "pet" && startHiddenThisRun)) window.show();
   // the pet view is transparent until the renderer finds an interactive part;
   // the setup window is opaque and keeps every click
   setClickThrough(window, mode === "pet");
@@ -546,14 +600,24 @@ ipcMain.on("is-packaged", (event) => {
   event.returnValue = app.isPackaged;
 });
 
-ipcMain.on("set-login-item", (event, openAtLogin) => {
+ipcMain.on("set-login-item", (event, openAtLogin, hiddenAtLogin) => {
   // login items only make sense for the installed app, not the dev runner
   if (!app.isPackaged) {
     event.returnValue = false;
     return;
   }
-  app.setLoginItemSettings({ openAtLogin: openAtLogin === true });
-  event.returnValue = app.getLoginItemSettings().openAtLogin === (openAtLogin === true);
+  const previous = launchHidden;
+  launchHidden = hiddenAtLogin === true;
+  if (!writeLaunchHidden(startupPreferencesFile(), launchHidden)) {
+    console.error("Could not save the launch-hidden setting");
+  }
+  const alreadyEnabled = loginItemIsEnabled(app, previous);
+  const enabled = openAtLogin === true || alreadyEnabled;
+  event.returnValue = applyLoginItemSettings(app, {
+    openAtLogin: enabled,
+    launchHidden,
+  });
+  updateTrayMenu();
 });
 
 ipcMain.on("schedule-reminder", (event, id, text, remindAt) => {
@@ -644,7 +708,19 @@ if (!app.requestSingleInstanceLock()) {
       app.setAppUserModelId("com.adyasa.desktopbuddy");
     }
     loadAlwaysOnTop();
+    loadLaunchHidden();
     createTray();
+    const openedAtLogin =
+      process.platform === "darwin" &&
+      app.getLoginItemSettings().wasOpenedAtLogin === true;
+    // Without a tray there is no way back, so a hidden launch stays visible.
+    startHiddenThisRun =
+      wasLaunchedHidden({
+        argv: process.argv,
+        launchHidden,
+        openedAtLogin,
+      }) && Boolean(tray);
+    if (app.isPackaged) reconcileLoginItem(app, launchHidden);
     createWindow();
     for (const event of [
       "display-added",

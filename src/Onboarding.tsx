@@ -7,6 +7,7 @@ export interface OnboardingResult {
   petName: string;
   yourName: string;
   startWithWindows: boolean;
+  launchHidden: boolean;
 }
 
 /**
@@ -39,6 +40,7 @@ export function Onboarding({
   const [petName, setPetName] = useState(initialPetName);
   const [yourName, setYourName] = useState(initialYourName);
   const [startWithWindows, setStartWithWindows] = useState(true);
+  const [launchHidden, setLaunchHidden] = useState(true);
 
   const shownPet = mode === "rename" ? initialPet : petType;
   const showLaunchOption = mode === "welcome" && Boolean(window.desktopBuddy?.isPackaged);
@@ -51,6 +53,7 @@ export function Onboarding({
       petName,
       yourName,
       startWithWindows: showLaunchOption && startWithWindows,
+      launchHidden: showLaunchOption && startWithWindows && launchHidden,
     });
   };
 
@@ -177,14 +180,26 @@ export function Onboarding({
             </div>
 
             {showLaunchOption && (
-              <label className="check">
-                <input
-                  type="checkbox"
-                  checked={startWithWindows}
-                  onChange={(event) => setStartWithWindows(event.target.checked)}
-                />
-                start me when my computer turns on
-              </label>
+              <>
+                <label className="check">
+                  <input
+                    type="checkbox"
+                    checked={startWithWindows}
+                    onChange={(event) => setStartWithWindows(event.target.checked)}
+                  />
+                  start me when my computer turns on
+                </label>
+                {startWithWindows && (
+                  <label className="check check--nested">
+                    <input
+                      type="checkbox"
+                      checked={launchHidden}
+                      onChange={(event) => setLaunchHidden(event.target.checked)}
+                    />
+                    wait in the tray at login, without popping up
+                  </label>
+                )}
+              </>
             )}
 
             {error && (

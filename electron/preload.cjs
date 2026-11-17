@@ -26,7 +26,8 @@ contextBridge.exposeInMainWorld("desktopBuddy", {
   setWorkStatus: (status) => ipcRenderer.send("work-status", status),
   setClickThrough: (ignore) => ipcRenderer.send("set-click-through", ignore),
   exitApp: () => ipcRenderer.send("exit-app"),
-  setLoginItem: (openAtLogin) => ipcRenderer.sendSync("set-login-item", openAtLogin),
+  setLoginItem: (openAtLogin, launchHidden) =>
+    ipcRenderer.sendSync("set-login-item", openAtLogin, launchHidden),
   scheduleReminder: (id, text, remindAt) => ipcRenderer.send("schedule-reminder", id, text, remindAt),
   cancelReminder: (id) => ipcRenderer.send("cancel-reminder", id),
   notifyMissedReminders: (notice) =>
