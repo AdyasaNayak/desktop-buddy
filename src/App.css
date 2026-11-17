@@ -526,8 +526,8 @@
 .buddy-menu {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 5px;
-  padding: 8px;
+  gap: 4px;
+  padding: 6px;
   border: 1.5px solid var(--bark);
   border-radius: 12px;
   background: var(--paper-raised);
@@ -535,7 +535,7 @@
 }
 
 .buddy-menu__button {
-  min-height: 32px;
+  min-height: 30px;
   padding: 4px;
   border: 1.5px solid var(--line-strong);
   border-radius: 8px;
@@ -639,6 +639,25 @@
 
 .buddy-panel--pets {
   width: min(100%, 340px);
+}
+
+.buddy-panel--settings {
+  width: min(100%, 300px);
+}
+
+.buddy-setting {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+}
+
+.buddy-setting__check {
+  color: var(--bark);
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .buddy-panel--water {
