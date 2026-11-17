@@ -197,3 +197,20 @@ test("the saved display id survives a round-trip and malformed ids are ignored",
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("a malformed display id is not saved", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "buddy-position-"));
+  const file = path.join(dir, "window-position.json");
+  try {
+    assert.equal(
+      writeWindowPosition(file, { x: 20, y: 30, displayId: "7" }),
+      true,
+    );
+    assert.deepEqual(JSON.parse(fs.readFileSync(file, "utf8")), {
+      x: 20,
+      y: 30,
+    });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

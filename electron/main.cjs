@@ -67,7 +67,7 @@ function setupBounds(display) {
   };
 }
 
-function displayForBounds(bounds, preferredId) {
+function displayForBounds(bounds) {
   const point = {
     x: bounds.x + bounds.width / 2,
     y: bounds.y + bounds.height / 2,
@@ -76,7 +76,7 @@ function displayForBounds(bounds, preferredId) {
   // the window's current monitor would clamp it before it could ever cross a
   // monitor boundary.
   return (
-    displayForPoint(screen.getAllDisplays(), point, preferredId) ??
+    displayForPoint(screen.getAllDisplays(), point) ??
     screen.getDisplayNearestPoint({
       x: Math.round(point.x),
       y: Math.round(point.y),
@@ -84,8 +84,8 @@ function displayForBounds(bounds, preferredId) {
   );
 }
 
-function clampToWorkArea(bounds, preferredId) {
-  return clampToArea(bounds, displayForBounds(bounds, preferredId).workArea);
+function clampToWorkArea(bounds) {
+  return clampToArea(bounds, displayForBounds(bounds).workArea);
 }
 
 function fitToWorkArea(bounds, snap = false) {
