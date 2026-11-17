@@ -26,7 +26,15 @@ contextBridge.exposeInMainWorld("desktopBuddy", {
   setWorkStatus: (status) => ipcRenderer.send("work-status", status),
   setClickThrough: (ignore) => ipcRenderer.send("set-click-through", ignore),
   exitApp: () => ipcRenderer.send("exit-app"),
-  setLoginItem: (openAtLogin) => ipcRenderer.sendSync("set-login-item", openAtLogin),
+  getStartWithWindows: () => ipcRenderer.sendSync("get-start-with-windows"),
+  setStartWithWindows: (enabled) =>
+    ipcRenderer.sendSync("set-start-with-windows", enabled),
+  onStartWithWindowsChanged: (callback) => {
+    const listener = (_event, change) => callback(change);
+    ipcRenderer.on("start-with-windows-changed", listener);
+    return () =>
+      ipcRenderer.removeListener("start-with-windows-changed", listener);
+  },
   scheduleReminder: (id, text, remindAt) => ipcRenderer.send("schedule-reminder", id, text, remindAt),
   cancelReminder: (id) => ipcRenderer.send("cancel-reminder", id),
   notifyMissedReminders: (notice) =>

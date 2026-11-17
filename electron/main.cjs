@@ -41,6 +41,7 @@ const {
   readAlwaysOnTop,
   writeAlwaysOnTop,
 } = require("./window-preferences.cjs");
+const { readLoginItem, setLoginItem } = require("./login-item.cjs");
 
 const PET_WINDOW = { width: 360, height: 260 };
 const SETUP_WINDOW = { width: 460, height: 600 };
@@ -55,6 +56,7 @@ let workStatus = null;
 let pendingWindowPosition;
 let positionSaveTimer;
 let alwaysOnTop = true;
+let startWithWindows = false;
 const reminderTimers = new Map();
 const windowModes = new WeakMap();
 const petWindowBounds = new WeakMap();
@@ -142,6 +144,49 @@ function windowPreferencesFile() {
 
 function loadAlwaysOnTop() {
   alwaysOnTop = readAlwaysOnTop(windowPreferencesFile());
+}
+
+function loadStartWithWindows() {
+  // login items only make sense for the installed app, not the dev runner
+  startWithWindows = app.isPackaged ? readLoginItem(app) : false;
+}
+
+// Apply the startup choice and report what the OS actually saved. Tray
+// changes also reach an open Settings dialog; renderer changes already have
+// the returned result, so they update themselves without a duplicate notice.
+function changeStartWithWindows(enabled, { notifyRenderer = false } = {}) {
+  if (!app.isPackaged) {
+    return {
+      ok: false,
+      enabled: startWithWindows,
+      error: "Start with Windows is available in the installed app.",
+    };
+  }
+
+  const result = setLoginItem(app, enabled);
+  startWithWindows = result.enabled;
+  if (notifyRenderer && buddyWindow && !buddyWindow.isDestroyed()) {
+    sendToRenderer(
+      buddyWindow.webContents,
+      "start-with-windows-changed",
+      result,
+    );
+  }
+  updateTrayMenu();
+  return result;
+}
+
+function changeStartWithWindowsFromTray(enabled) {
+  const result = changeStartWithWindows(enabled, { notifyRenderer: true });
+  if (!result.ok) {
+    showNotification({
+      Notification,
+      title: "Could not change Start with Windows",
+      body: result.error,
+      failureMessage: "Could not show the startup setting error",
+    });
+  }
+  return result;
 }
 
 function setBuddyAlwaysOnTop(window, enabled) {
@@ -306,6 +351,16 @@ function updateTrayMenu() {
       checked: alwaysOnTop,
       click: (item) => setBuddyAlwaysOnTop(buddyWindow, item.checked),
     },
+  );
+  if (app.isPackaged) {
+    template.push({
+      label: "Start with Windows",
+      type: "checkbox",
+      checked: startWithWindows,
+      click: (item) => changeStartWithWindowsFromTray(item.checked),
+    });
+  }
+  template.push(
     { type: "separator" },
     { label: "Quit Desktop Buddy", click: () => app.quit() },
   );
@@ -546,14 +601,21 @@ ipcMain.on("is-packaged", (event) => {
   event.returnValue = app.isPackaged;
 });
 
-ipcMain.on("set-login-item", (event, openAtLogin) => {
-  // login items only make sense for the installed app, not the dev runner
-  if (!app.isPackaged) {
-    event.returnValue = false;
+ipcMain.on("get-start-with-windows", (event) => {
+  event.returnValue = startWithWindows;
+});
+
+ipcMain.on("set-start-with-windows", (event, enabled) => {
+  const window = BrowserWindow.fromWebContents(event.sender);
+  if (!window || window !== buddyWindow || typeof enabled !== "boolean") {
+    event.returnValue = {
+      ok: false,
+      enabled: startWithWindows,
+      error: "Could not change the Start with Windows setting.",
+    };
     return;
   }
-  app.setLoginItemSettings({ openAtLogin: openAtLogin === true });
-  event.returnValue = app.getLoginItemSettings().openAtLogin === (openAtLogin === true);
+  event.returnValue = changeStartWithWindows(enabled);
 });
 
 ipcMain.on("schedule-reminder", (event, id, text, remindAt) => {
@@ -644,6 +706,7 @@ if (!app.requestSingleInstanceLock()) {
       app.setAppUserModelId("com.adyasa.desktopbuddy");
     }
     loadAlwaysOnTop();
+    loadStartWithWindows();
     createTray();
     createWindow();
     for (const event of [
