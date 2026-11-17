@@ -202,6 +202,22 @@ function setBuddyBounds(window, bounds) {
   if (!wasResizable) window.setResizable(false);
 }
 
+// Native window moves (the setup window's title bar and OS-initiated moves)
+// never reach move-window, so clamp every move the platform reports. The same
+// centre-of-the-window display rule applies as for a renderer-driven drag.
+function keepWindowInWorkArea(window) {
+  if (!window || window.isDestroyed()) return;
+
+  const bounds = window.getBounds();
+  const clamped = clampToWorkArea(bounds);
+  if (clamped.x !== bounds.x || clamped.y !== bounds.y) {
+    window.setPosition(clamped.x, clamped.y);
+  }
+  // remember moves inside the screen too, so a native move is restored after
+  // a restart just like a renderer-driven drag (setup moves are ignored)
+  savePetPosition(window, clamped);
+}
+
 // A monitor can disappear or change resolution while the buddy is running.
 // Bring it back onto an available work area instead of leaving it off screen.
 function keepWindowOnScreen() {
@@ -362,6 +378,9 @@ function createWindow() {
     send: (point) =>
       sendToRenderer(window.webContents, "window-pointer-changed", point),
   });
+  window.on("move", () => keepWindowInWorkArea(window));
+  // some platforms only report the final position at the end of a drag
+  window.on("moved", () => keepWindowInWorkArea(window));
   window.on("show", () => {
     updateTrayMenu();
     // never let a freshly shown pet block the desktop while the renderer
@@ -474,14 +493,21 @@ ipcMain.on("window-mode", (event, mode) => {
   if (!window || window.isDestroyed() || (mode !== "setup" && mode !== "pet")) return;
 
   const bounds = window.getBounds();
+  const previousMode = windowModes.get(window);
   if (mode === "setup") {
     // the setup window is opaque, so it must catch every click
     setClickThrough(window, false);
     // remember where a visible buddy was so renaming can put it back
-    if (windowModes.get(window) === "pet") {
+    if (previousMode === "pet") {
       petWindowBounds.set(window, bounds);
       savePetPosition(window, bounds);
     }
+  }
+
+  // Switch modes before resizing: setBounds can emit a synchronous move, and
+  // the centered setup bounds must not be remembered as the pet position.
+  windowModes.set(window, mode);
+  if (mode === "setup") {
     setBuddyBounds(window, setupBounds(screen.getDisplayMatching(bounds)));
   } else {
     const saved = petWindowBounds.get(window);
@@ -501,7 +527,6 @@ ipcMain.on("window-mode", (event, mode) => {
   }
 
   const wasVisible = window.isVisible();
-  windowModes.set(window, mode);
   if (!wasVisible) window.show();
   // the pet view is transparent until the renderer finds an interactive part;
   // the setup window is opaque and keeps every click
