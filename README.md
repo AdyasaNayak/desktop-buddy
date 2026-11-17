@@ -46,6 +46,14 @@ the top-right corner, or uncheck **Always on top** in the tray menu, when a
 full-screen game or video should cover it. The choice is saved and restored on
 the next launch.
 
+## Starting with Windows
+
+Setup turns on **Start with Windows** by default so reminders can fire after a
+reboot, but the buddy waits in the tray instead of opening over your desktop.
+Uncheck **Launch hidden at login** in the tray menu (or the matching setup
+checkbox) to have the buddy appear when you sign in. Opening the app yourself
+from the Start menu or its shortcut still shows the buddy.
+
 ## Reminders and quitting
 
 Reminders are saved in the app's local IndexedDB, so quitting does not delete
@@ -74,7 +82,8 @@ and a desktop app cannot run code while it is closed.
   then they are removed automatically. **Clear fired reminders** in the
   reminder panel removes them immediately.
 - Choosing **Start with Windows** during setup keeps the buddy running after a
-  reboot, so future reminders can still fire.
+  reboot, so future reminders can still fire. It starts in the tray by default;
+  use **Launch hidden at login** in the tray menu to change that.
 
 The scheduling and catch-up logic lives in `electron/main.cjs` and
 `src/reminders.ts`.

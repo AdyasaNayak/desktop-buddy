@@ -65,7 +65,7 @@ declare global {
       onWindowHidden: (callback: () => void) => () => void;
       onWindowWake: (callback: () => void) => () => void;
       onWindowShown: (callback: () => void) => () => void;
-      setLoginItem: (openAtLogin: boolean) => boolean;
+      setLoginItem: (openAtLogin: boolean, launchHidden: boolean) => boolean;
       isPackaged: boolean;
     };
   }
@@ -962,7 +962,7 @@ export default function App() {
       // login-item registration is a first-run choice only; renaming never
       // silently re-applies (or ignores) the startup checkbox
       if (result.startWithWindows && window.desktopBuddy?.isPackaged) {
-        window.desktopBuddy.setLoginItem(true);
+        window.desktopBuddy.setLoginItem(true, result.launchHidden);
       }
       setProfile(saved);
       setRenaming(false);
