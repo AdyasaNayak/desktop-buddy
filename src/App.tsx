@@ -6,6 +6,11 @@ import { PetPreview } from "./PetPreview";
 import { WaterPanel } from "./WaterPanel";
 import { WorkPanel } from "./WorkPanel";
 import { ReminderPanel } from "./ReminderPanel";
+import {
+  SettingsPanel,
+  type StartupSettings,
+  type StartupSettingsResult,
+} from "./SettingsPanel";
 import { formatClock, formatDuration, formatInterval } from "./time";
 import {
   missedReminderNotice,
@@ -33,12 +38,6 @@ import {
   type PetState,
   type PetType,
 } from "./pets";
-
-interface StartWithWindowsResult {
-  ok: boolean;
-  enabled: boolean;
-  error?: string;
-}
 
 declare global {
   interface Window {
@@ -71,10 +70,13 @@ declare global {
       onWindowHidden: (callback: () => void) => () => void;
       onWindowWake: (callback: () => void) => () => void;
       onWindowShown: (callback: () => void) => () => void;
-      getStartWithWindows: () => boolean;
-      setStartWithWindows: (enabled: boolean) => StartWithWindowsResult;
-      onStartWithWindowsChanged: (
-        callback: (change: StartWithWindowsResult) => void,
+      getStartupSettings: () => StartupSettings;
+      setStartupSettings: (
+        enabled: boolean,
+        launchHidden: boolean,
+      ) => StartupSettingsResult;
+      onStartupSettingsChanged: (
+        callback: (change: StartupSettingsResult) => void,
       ) => () => void;
       isPackaged: boolean;
     };
@@ -96,8 +98,12 @@ export default function App() {
   const [reminderOpen, setReminderOpen] = useState(false);
   const [sleepOpen, setSleepOpen] = useState(false);
   const [reminders, setReminders] = useState<Reminder[]>([]);
-  const [startWithWindows, setStartWithWindows] = useState(
-    () => window.desktopBuddy?.getStartWithWindows() ?? false,
+  const [startup, setStartup] = useState<StartupSettings>(
+    () =>
+      window.desktopBuddy?.getStartupSettings() ?? {
+        enabled: false,
+        launchHidden: true,
+      },
   );
   const [startupError, setStartupError] = useState("");
   const [sleepMinutes, setSleepMinutes] = useState("15");
@@ -806,16 +812,19 @@ export default function App() {
     welcomeTimer.current = window.setTimeout(() => setWelcome(null), ms);
   }, []);
 
-  // The tray menu can change this while the buddy menu is closed.
+  // The tray menu can change these while the buddy menu is closed.
   useEffect(() => {
-    return window.desktopBuddy?.onStartWithWindowsChanged((change) => {
-      setStartWithWindows(change.enabled);
+    return window.desktopBuddy?.onStartupSettingsChanged((change) => {
+      setStartup({
+        enabled: change.enabled,
+        launchHidden: change.launchHidden,
+      });
       if (change.ok) {
         setStartupError("");
         return;
       }
       const message =
-        change.error ?? "Could not change the Start with Windows setting.";
+        change.error ?? "Could not change the startup setting.";
       setStartupError(message);
       showBubble(message, 9000);
     });
@@ -873,21 +882,24 @@ export default function App() {
     window.desktopBuddy?.setAlwaysOnTop(next);
   };
 
-  const changeStartWithWindows = (enabled: boolean) => {
+  const changeStartup = (
+    enabled: boolean,
+    launchHidden: boolean,
+  ): StartupSettingsResult => {
     const bridge = window.desktopBuddy;
     if (!bridge) {
       const error = "Start with Windows is available in the installed app.";
-      setStartWithWindows(false);
+      setStartup({ enabled: false, launchHidden });
       setStartupError(error);
-      return { ok: false, enabled: false, error };
+      return { ok: false, enabled: false, launchHidden, error };
     }
 
-    const result = bridge.setStartWithWindows(enabled);
-    setStartWithWindows(result.enabled);
+    const result = bridge.setStartupSettings(enabled, launchHidden);
+    setStartup({ enabled: result.enabled, launchHidden: result.launchHidden });
     setStartupError(
       result.ok
         ? ""
-        : (result.error ?? "Could not change the Start with Windows setting."),
+        : (result.error ?? "Could not change the startup setting."),
     );
     return result;
   };
@@ -1013,8 +1025,11 @@ export default function App() {
       // login items only make sense for the installed app, not the dev runner
       let startupWarning = "";
       if (!renaming && window.desktopBuddy?.isPackaged) {
-        const startup = changeStartWithWindows(result.startWithWindows);
-        if (!startup.ok) {
+        const startupChange = changeStartup(
+          result.startWithWindows,
+          result.launchHidden,
+        );
+        if (!startupChange.ok) {
           startupWarning =
             "i couldn't change the start with windows setting. you can try again in Settings.";
         }
@@ -1304,59 +1319,13 @@ export default function App() {
       )}
 
       {settingsOpen && (
-        <div className="buddy-dialog">
-          <div
-            className="buddy-panel buddy-panel--settings"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="settings-dialog-title"
-          >
-            <div className="buddy-panel__head">
-              <h2 id="settings-dialog-title" className="buddy-panel__title">
-                Settings
-              </h2>
-              <button
-                type="button"
-                className="buddy-close buddy-panel__close"
-                aria-label="Close settings"
-                onClick={() => setSettingsOpen(false)}
-              >
-                ×
-              </button>
-            </div>
-            <div className="buddy-setting">
-              <label className="check buddy-setting__check">
-                <input
-                  type="checkbox"
-                  checked={startWithWindows}
-                  disabled={!supportsStartWithWindows}
-                  aria-describedby="startup-setting-help"
-                  onChange={(event) =>
-                    changeStartWithWindows(event.target.checked)
-                  }
-                />
-                Start with Windows
-              </label>
-              <p id="startup-setting-help" className="buddy-panel__hint">
-                {supportsStartWithWindows
-                  ? "Open Desktop Buddy automatically when you sign in."
-                  : "Available in the installed app."}
-              </p>
-            </div>
-            {startupError && (
-              <p className="buddy-panel__error" role="alert">
-                {startupError}
-              </p>
-            )}
-            <button
-              type="button"
-              className="btn"
-              onClick={() => setSettingsOpen(false)}
-            >
-              Done
-            </button>
-          </div>
-        </div>
+        <SettingsPanel
+          settings={startup}
+          supported={supportsStartWithWindows}
+          error={startupError}
+          onChange={changeStartup}
+          onClose={() => setSettingsOpen(false)}
+        />
       )}
 
       {sleepOpen && (

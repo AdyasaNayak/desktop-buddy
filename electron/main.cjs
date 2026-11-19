@@ -41,7 +41,18 @@ const {
   readAlwaysOnTop,
   writeAlwaysOnTop,
 } = require("./window-preferences.cjs");
-const { readLoginItem, setLoginItem } = require("./login-item.cjs");
+const {
+  DEFAULT_LAUNCH_HIDDEN,
+  LOGIN_ITEM_ERROR,
+  applyLoginItemSettings,
+  loginItemIsEnabled,
+  loginItemWillLaunch,
+  readLaunchHidden,
+  readLoginItemState,
+  reconcileLoginItem,
+  wasLaunchedHidden,
+  writeLaunchHidden,
+} = require("./startup.cjs");
 
 const PET_WINDOW = { width: 360, height: 260 };
 const SETUP_WINDOW = { width: 460, height: 600 };
@@ -56,7 +67,9 @@ let workStatus = null;
 let pendingWindowPosition;
 let positionSaveTimer;
 let alwaysOnTop = true;
+let launchHidden = DEFAULT_LAUNCH_HIDDEN;
 let startWithWindows = false;
+let startHiddenThisRun = false;
 const reminderTimers = new Map();
 const windowModes = new WeakMap();
 const petWindowBounds = new WeakMap();
@@ -142,33 +155,39 @@ function windowPreferencesFile() {
   return path.join(app.getPath("userData"), "window-preferences.json");
 }
 
+function startupPreferencesFile() {
+  return path.join(app.getPath("userData"), "startup-preferences.json");
+}
+
 function loadAlwaysOnTop() {
   alwaysOnTop = readAlwaysOnTop(windowPreferencesFile());
 }
 
-function loadStartWithWindows() {
-  // login items only make sense for the installed app, not the dev runner
-  startWithWindows = app.isPackaged ? readLoginItem(app) : false;
+function loadLaunchHidden() {
+  launchHidden = readLaunchHidden(startupPreferencesFile());
 }
 
-// Apply the startup choice and report what the OS actually saved. Tray
-// changes also reach an open Settings dialog; renderer changes already have
-// the returned result, so they update themselves without a duplicate notice.
-function changeStartWithWindows(enabled, { notifyRenderer = false } = {}) {
-  if (!app.isPackaged) {
-    return {
-      ok: false,
-      enabled: startWithWindows,
-      error: "Start with Windows is available in the installed app.",
-    };
-  }
+function refreshStartWithWindows() {
+  // Login items only make sense for the installed app, not the dev runner.
+  startWithWindows = app.isPackaged
+    ? readLoginItemState(app, launchHidden).willLaunch
+    : false;
+  return startWithWindows;
+}
 
-  const result = setLoginItem(app, enabled);
-  startWithWindows = result.enabled;
-  if (notifyRenderer && buddyWindow && !buddyWindow.isDestroyed()) {
+function startupResult(extra = {}) {
+  return { ok: true, enabled: startWithWindows, launchHidden, ...extra };
+}
+
+function startupFailure(error) {
+  return { ok: false, enabled: startWithWindows, launchHidden, error };
+}
+
+function publishStartupChange(result) {
+  if (buddyWindow && !buddyWindow.isDestroyed()) {
     sendToRenderer(
       buddyWindow.webContents,
-      "start-with-windows-changed",
+      "startup-settings-changed",
       result,
     );
   }
@@ -176,12 +195,97 @@ function changeStartWithWindows(enabled, { notifyRenderer = false } = {}) {
   return result;
 }
 
-function changeStartWithWindowsFromTray(enabled) {
-  const result = changeStartWithWindows(enabled, { notifyRenderer: true });
+// Apply both startup choices and report what Windows actually saved. Changing
+// only the hidden choice keeps an existing login item (including one the user
+// disabled in Task Manager) intact; changing Start with Windows follows the
+// checkbox explicitly.
+function changeStartupSettings(
+  enabled,
+  hiddenAtLogin,
+  { notifyRenderer = false } = {},
+) {
+  if (typeof enabled !== "boolean" || typeof hiddenAtLogin !== "boolean") {
+    return startupFailure("Could not change the startup setting.");
+  }
+  if (!app.isPackaged) {
+    return startupFailure(
+      "Start with Windows is available in the installed app.",
+    );
+  }
+
+  const previousLaunchHidden = launchHidden;
+  const hiddenChanged = hiddenAtLogin !== previousLaunchHidden;
+  const enabledChanged = enabled !== startWithWindows;
+  if (hiddenChanged) {
+    if (!writeLaunchHidden(startupPreferencesFile(), hiddenAtLogin)) {
+      return startupFailure("Could not save the startup setting.");
+    }
+    launchHidden = hiddenAtLogin;
+  }
+
+  let state;
+  let failed = false;
+  let wasRegistered = false;
+  try {
+    if (enabledChanged) {
+      state = applyLoginItemSettings(app, {
+        openAtLogin: enabled,
+        launchHidden,
+      });
+    } else if (hiddenChanged) {
+      wasRegistered = loginItemIsEnabled(app, previousLaunchHidden);
+      state = applyLoginItemSettings(app, {
+        openAtLogin: wasRegistered,
+        launchHidden,
+        enabled: wasRegistered
+          ? loginItemWillLaunch(app, previousLaunchHidden)
+          : true,
+      });
+    } else {
+      // Pick up a change made in Windows without writing anything.
+      state = readLoginItemState(app, launchHidden);
+    }
+  } catch (error) {
+    failed = true;
+    console.error("Could not change the Start with Windows setting", error);
+    state = readLoginItemState(app, launchHidden);
+  }
+
+  startWithWindows = state.willLaunch;
+  let ok = !failed;
+  if (enabledChanged) {
+    ok = ok && state.willLaunch === enabled;
+  } else if (hiddenChanged && state.openAtLogin !== wasRegistered) {
+    ok = false;
+  }
+  if (!ok) {
+    // A failed write leaves the login item on its old arguments, so show and
+    // persist the old hidden choice too instead of leaving disk out of sync.
+    startWithWindows = readLoginItemState(
+      app,
+      previousLaunchHidden,
+    ).willLaunch;
+    if (hiddenChanged) {
+      if (!writeLaunchHidden(startupPreferencesFile(), previousLaunchHidden)) {
+        console.error("Could not restore the launch-hidden setting");
+      }
+      launchHidden = previousLaunchHidden;
+    }
+  }
+  const result = ok ? startupResult() : startupFailure(LOGIN_ITEM_ERROR);
+  if (notifyRenderer) return publishStartupChange(result);
+  updateTrayMenu();
+  return result;
+}
+
+function changeStartupFromTray(enabled, hiddenAtLogin) {
+  const result = changeStartupSettings(enabled, hiddenAtLogin, {
+    notifyRenderer: true,
+  });
   if (!result.ok) {
     showNotification({
       Notification,
-      title: "Could not change Start with Windows",
+      title: "Could not change the startup setting",
       body: result.error,
       failureMessage: "Could not show the startup setting error",
     });
@@ -281,6 +385,7 @@ function keepWindowOnScreen() {
 }
 
 function showBuddy() {
+  startHiddenThisRun = false;
   const wasSleeping = sleepTimer !== undefined;
   clearTimeout(sleepTimer);
   sleepTimer = undefined;
@@ -351,13 +456,20 @@ function updateTrayMenu() {
       checked: alwaysOnTop,
       click: (item) => setBuddyAlwaysOnTop(buddyWindow, item.checked),
     },
+    {
+      label: "Launch hidden at login",
+      type: "checkbox",
+      checked: launchHidden,
+      click: (item) =>
+        changeStartupFromTray(startWithWindows, item.checked),
+    },
   );
   if (app.isPackaged) {
     template.push({
       label: "Start with Windows",
       type: "checkbox",
       checked: startWithWindows,
-      click: (item) => changeStartWithWindowsFromTray(item.checked),
+      click: (item) => changeStartupFromTray(item.checked, launchHidden),
     });
   }
   template.push(
@@ -412,9 +524,13 @@ function createWindow() {
 
   // The renderer picks the window size once it knows whether this is a first
   // launch. Show the window anyway if that never arrives (for example a
-  // renderer crash), so the app can't start invisible.
+  // renderer crash), so a normal launch can't start invisible.
   const revealTimer = setTimeout(() => {
-    if (!window.isDestroyed() && !window.isVisible()) window.show();
+    // A login launch deliberately stays out of the way. Opening the buddy from
+    // the tray clears the flag, so the fallback still applies then.
+    if (!startHiddenThisRun && !window.isDestroyed() && !window.isVisible()) {
+      window.show();
+    }
   }, 4000);
   // once the renderer has shown the window, the fallback is no longer needed
   // and must not undo a deliberate hide later on
@@ -437,6 +553,7 @@ function createWindow() {
   // some platforms only report the final position at the end of a drag
   window.on("moved", () => keepWindowInWorkArea(window));
   window.on("show", () => {
+    startHiddenThisRun = false;
     updateTrayMenu();
     // never let a freshly shown pet block the desktop while the renderer
     // waits to find out where the pointer is
@@ -550,6 +667,8 @@ ipcMain.on("window-mode", (event, mode) => {
   const bounds = window.getBounds();
   const previousMode = windowModes.get(window);
   if (mode === "setup") {
+    // a first-run login needs the setup card on screen, not a hidden window
+    startHiddenThisRun = false;
     // the setup window is opaque, so it must catch every click
     setClickThrough(window, false);
     // remember where a visible buddy was so renaming can put it back
@@ -582,7 +701,8 @@ ipcMain.on("window-mode", (event, mode) => {
   }
 
   const wasVisible = window.isVisible();
-  if (!wasVisible) window.show();
+  // A login launch stays in the tray until the user asks for the buddy.
+  if (!wasVisible && !(mode === "pet" && startHiddenThisRun)) window.show();
   // the pet view is transparent until the renderer finds an interactive part;
   // the setup window is opaque and keeps every click
   setClickThrough(window, mode === "pet");
@@ -601,21 +721,34 @@ ipcMain.on("is-packaged", (event) => {
   event.returnValue = app.isPackaged;
 });
 
-ipcMain.on("get-start-with-windows", (event) => {
-  event.returnValue = startWithWindows;
+ipcMain.on("get-startup-settings", (event) => {
+  const window = BrowserWindow.fromWebContents(event.sender);
+  if (window && window === buddyWindow && app.isPackaged) {
+    const previous = startWithWindows;
+    refreshStartWithWindows();
+    if (previous !== startWithWindows) updateTrayMenu();
+  }
+  event.returnValue = {
+    supported: app.isPackaged,
+    enabled: startWithWindows,
+    launchHidden,
+  };
 });
 
-ipcMain.on("set-start-with-windows", (event, enabled) => {
+ipcMain.on("set-startup-settings", (event, enabled, hiddenAtLogin) => {
   const window = BrowserWindow.fromWebContents(event.sender);
-  if (!window || window !== buddyWindow || typeof enabled !== "boolean") {
-    event.returnValue = {
-      ok: false,
-      enabled: startWithWindows,
-      error: "Could not change the Start with Windows setting.",
-    };
+  if (
+    !window ||
+    window !== buddyWindow ||
+    typeof enabled !== "boolean" ||
+    typeof hiddenAtLogin !== "boolean"
+  ) {
+    event.returnValue = startupFailure(
+      "Could not change the startup setting.",
+    );
     return;
   }
-  event.returnValue = changeStartWithWindows(enabled);
+  event.returnValue = changeStartupSettings(enabled, hiddenAtLogin);
 });
 
 ipcMain.on("schedule-reminder", (event, id, text, remindAt) => {
@@ -706,8 +839,26 @@ if (!app.requestSingleInstanceLock()) {
       app.setAppUserModelId("com.adyasa.desktopbuddy");
     }
     loadAlwaysOnTop();
-    loadStartWithWindows();
+    loadLaunchHidden();
+    if (app.isPackaged) {
+      try {
+        reconcileLoginItem(app, launchHidden);
+      } catch (error) {
+        console.error("Could not update the Start with Windows setting", error);
+      }
+    }
+    refreshStartWithWindows();
     createTray();
+    const openedAtLogin =
+      process.platform === "darwin" &&
+      app.getLoginItemSettings().wasOpenedAtLogin === true;
+    // Without a tray there is no way back, so a hidden launch stays visible.
+    startHiddenThisRun =
+      wasLaunchedHidden({
+        argv: process.argv,
+        launchHidden,
+        openedAtLogin,
+      }) && Boolean(tray);
     createWindow();
     for (const event of [
       "display-added",

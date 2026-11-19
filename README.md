@@ -48,11 +48,12 @@ the next launch.
 
 ## Starting with Windows
 
-First-run setup offers **Start with Windows**, so the buddy can keep reminders
-running after a reboot. Change it later in **Settings** in the buddy's menu or
-from the tray menu. Desktop Buddy reads the setting back from Windows; if the
-change was not saved, the old setting stays in place and the app says so
-instead of pretending it worked.
+Setup turns on **Start with Windows** by default so reminders can fire after a
+reboot, but the buddy waits in the tray instead of opening over your desktop.
+Change either choice later in **Settings** in the buddy's menu or from the tray
+menu. Desktop Buddy reads the setting back from Windows; if the change was not
+saved, the old setting stays in place and the app says so instead of pretending
+it worked.
 
 ## Reminders and quitting
 
@@ -82,8 +83,8 @@ and a desktop app cannot run code while it is closed.
   then they are removed automatically. **Clear fired reminders** in the
   reminder panel removes them immediately.
 - Choosing **Start with Windows** during setup keeps the buddy running after a
-  reboot, so future reminders can still fire. Change it later in **Settings**
-  or from the tray menu.
+  reboot, so future reminders can still fire. It starts in the tray by default;
+  change either choice later in **Settings** or from the tray menu.
 
 The scheduling and catch-up logic lives in `electron/main.cjs` and
 `src/reminders.ts`.

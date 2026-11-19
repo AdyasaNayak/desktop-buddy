@@ -287,6 +287,10 @@
   accent-color: var(--leaf);
 }
 
+.check--nested {
+  margin-left: 26px;
+}
+
 .btn {
   min-height: 42px;
   padding: 9px 14px;
@@ -639,10 +643,6 @@
 
 .buddy-panel--pets {
   width: min(100%, 340px);
-}
-
-.buddy-panel--settings {
-  width: min(100%, 300px);
 }
 
 .buddy-setting {

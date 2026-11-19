@@ -26,14 +26,14 @@ contextBridge.exposeInMainWorld("desktopBuddy", {
   setWorkStatus: (status) => ipcRenderer.send("work-status", status),
   setClickThrough: (ignore) => ipcRenderer.send("set-click-through", ignore),
   exitApp: () => ipcRenderer.send("exit-app"),
-  getStartWithWindows: () => ipcRenderer.sendSync("get-start-with-windows"),
-  setStartWithWindows: (enabled) =>
-    ipcRenderer.sendSync("set-start-with-windows", enabled),
-  onStartWithWindowsChanged: (callback) => {
+  getStartupSettings: () => ipcRenderer.sendSync("get-startup-settings"),
+  setStartupSettings: (enabled, launchHidden) =>
+    ipcRenderer.sendSync("set-startup-settings", enabled, launchHidden),
+  onStartupSettingsChanged: (callback) => {
     const listener = (_event, change) => callback(change);
-    ipcRenderer.on("start-with-windows-changed", listener);
+    ipcRenderer.on("startup-settings-changed", listener);
     return () =>
-      ipcRenderer.removeListener("start-with-windows-changed", listener);
+      ipcRenderer.removeListener("startup-settings-changed", listener);
   },
   scheduleReminder: (id, text, remindAt) => ipcRenderer.send("schedule-reminder", id, text, remindAt),
   cancelReminder: (id) => ipcRenderer.send("cancel-reminder", id),
