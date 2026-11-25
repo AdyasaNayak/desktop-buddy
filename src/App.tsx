@@ -23,16 +23,18 @@ import type { WaterNudgeNotice } from "./waterMessages";
 import type { WaterSettings } from "./waterOptions";
 import { usePendingAction } from "./usePendingAction";
 import { useClickThrough } from "./useClickThrough";
-import { isInside, petHitBox, type Rect } from "./clickThrough";
+import type { Rect } from "./clickThrough";
 import {
-  PET_FRAME_SIZE,
   PETS,
   PET_PREVIEW_SIZE,
   PET_TYPES,
   toPetType,
-  type PetState,
   type PetType,
 } from "./pets";
+import { startPetEngine, type PetEngine, type PetEntrance } from "./petEngine";
+import { workElapsedAt, type ActiveWork } from "./useWorkLog";
+import { useNow } from "./useNow";
+import { PixelIcon } from "./PixelIcon";
 
 declare global {
   interface Window {
@@ -75,7 +77,10 @@ const SIZE = 160; // draw size - bigger = larger buddy
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const controlRef = useRef({ drinkLeft: 0, work: false });
+  const stageRef = useRef<HTMLDivElement>(null);
+  const engineRef = useRef<PetEngine | null>(null);
+  const entranceRef = useRef<PetEntrance>("drop");
+  const workingRef = useRef(false);
   const [alwaysOnTop, setAlwaysOnTop] = useState(
     () => window.desktopBuddy?.getAlwaysOnTop() ?? true,
   );
@@ -112,12 +117,7 @@ export default function App() {
     petReady,
   );
   const work = useWorkLog();
-  const {
-    active: activeWork,
-    longBreakDue,
-    elapsedMs: workElapsedMs,
-    acknowledgeLongReminder,
-  } = work;
+  const { active: activeWork, longBreakDue, acknowledgeLongReminder } = work;
   const refreshClickThrough = useClickThrough(petReady, petBoxRef);
   const windowMode =
     profile === undefined ? null : showSetup || renaming ? "setup" : "pet";
@@ -176,28 +176,65 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    controlRef.current.work = work.active !== null;
-  }, [work.active]);
+    workingRef.current = activeWork !== null;
+    engineRef.current?.wake();
+  }, [activeWork]);
 
   // The tray is the only place a hidden buddy can show that a timer is still
-  // running, so keep its tooltip and menu in sync with the clock.
+  // running, so keep its tooltip in sync with the clock. This pushes from an
+  // interval instead of React state so the app does not re-render each second.
   useEffect(() => {
-    window.desktopBuddy?.setWorkStatus(
-      activeWork
-        ? {
-            task: activeWork.task,
-            elapsedMs: workElapsedMs,
-            paused: activeWork.pausedAt !== undefined,
-          }
-        : null,
-    );
-  }, [activeWork, workElapsedMs]);
+    const bridge = window.desktopBuddy;
+    if (!bridge) return;
+    if (!activeWork) {
+      bridge.setWorkStatus(null);
+      return;
+    }
+    const paused = activeWork.pausedAt !== undefined;
+    const send = () =>
+      bridge.setWorkStatus({
+        task: activeWork.task,
+        elapsedMs: workElapsedAt(activeWork, Date.now()),
+        paused,
+      });
+    send();
+    if (paused) return;
+    const timer = window.setInterval(send, 1000);
+    return () => window.clearInterval(timer);
+  }, [activeWork]);
 
-  // a water nudge takes over the bubble and plays the drinking animation
+  // a water nudge takes over the bubble: the buddy jumps for attention and
+  // plays the drinking animation
   useEffect(() => {
     if (!water.prompt) return;
-    controlRef.current.drinkLeft = 2600;
+    engineRef.current?.react("alert");
+    engineRef.current?.drink(2600);
   }, [water.prompt]);
+
+  // Escape closes the top-most overlay; clicking away from the buddy (the
+  // window loses focus) closes the menu.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (sleepOpen || changingPet || waterOpen || workOpen || reminderOpen) {
+        setSleepOpen(false);
+        setChangingPet(false);
+        setWaterOpen(false);
+        setWorkOpen(false);
+        setReminderOpen(false);
+        setProfileError("");
+      } else if (menuOpen) {
+        setMenuOpen(false);
+      }
+    };
+    const onBlur = () => setMenuOpen(false);
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("blur", onBlur);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("blur", onBlur);
+    };
+  }, [sleepOpen, changingPet, waterOpen, workOpen, reminderOpen, menuOpen]);
 
   useEffect(() => {
     let active = true;
@@ -390,280 +427,59 @@ export default function App() {
     // the canvas only exists once a profile is loaded/created
     if (!petReady) return;
     const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d")!;
-    const pet = PETS[activePet];
-    const petBoxAt = (petX: number, petY: number) =>
-      petHitBox(petX, petY, SIZE, pet.hitBox);
+    const stage = stageRef.current;
+    if (!canvas || !stage) return;
 
-    const images: Record<PetState, HTMLImageElement> = {
-      idle: new Image(),
-      heart: new Image(),
-      drink: new Image(),
-      work: new Image(),
-    };
-    images.idle.src = pet.sheets.idle;
-    images.heart.src = pet.sheets.heart;
-    images.drink.src = pet.sheets.drink;
-    images.work.src = pet.sheets.work;
-    // a sheet finishing after an earlier empty paint must invalidate the cache
-    images.heart.onload = () => {
-      lastPaintKey = "";
-    };
-    images.drink.onload = () => {
-      lastPaintKey = "";
-    };
-    images.work.onload = () => {
-      lastPaintKey = "";
-    };
-
-    let groundY = window.innerHeight - SIZE - 10;
-    const savedPosition = positionRef.current;
-    let x = savedPosition
-      ? Math.max(0, Math.min(savedPosition.x, window.innerWidth - SIZE))
-      : window.innerWidth / 2 - SIZE / 2;
-    let y = savedPosition ? Math.min(savedPosition.y, groundY) : groundY;
-    petBoxRef.current = petBoxAt(x, y);
-    // the click-through hook mounted before this box existed, so let it
-    // re-check where the pointer is now that the pet can be hit-tested
-    refreshClickThrough();
-    let targetX = x;
-    let isWalking = false;
-    let isDragging = false;
-    let dragOffsetX = 0;
-    let dragOffsetY = 0;
-    let pointerStartX = 0;
-    let pointerStartY = 0;
-    let dragMoved = false;
-    let stateTimer = 0;
-    let frame = 0;
-    let lastAnimTime = 0;
-    let prevTime = 0;
-    let raf = 0;
-    let isHovering = false;
-    let lastState: PetState = "idle";
-    let lastPaintKey = "";
-    let petTimeout: ReturnType<typeof setTimeout> | undefined;
-    let disposed = false;
-
-    const resize = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-      groundY = canvas.height - SIZE - 10;
-      y = Math.min(y, groundY);
-      lastPaintKey = ""; // resizing clears the canvas, force a repaint
-    };
-    resize();
-    window.addEventListener("resize", resize);
-
-    const handleMouseMove = (e: MouseEvent) => {
-      const rect = canvas.getBoundingClientRect();
-      const mx = e.clientX - rect.left;
-      const my = e.clientY - rect.top;
-      isHovering = isInside(petBoxAt(x, y), mx, my);
-      canvas.style.cursor = isHovering ? "pointer" : "default";
-    };
-    const handleMouseLeave = () => {
-      isHovering = false;
-      canvas.style.cursor = "default";
-    };
-    const handleDoubleClick = (e: MouseEvent) => {
-      const rect = canvas.getBoundingClientRect();
-      const mx = e.clientX - rect.left;
-      const my = e.clientY - rect.top;
-      if (isInside(petBoxAt(x, y), mx, my)) {
-        y = groundY - 20;
-        if (petTimeout) clearTimeout(petTimeout);
-        petTimeout = setTimeout(() => (y = groundY), 150);
-      }
-    };
-    const isPetAt = (clientX: number, clientY: number) => {
-      const rect = canvas.getBoundingClientRect();
-      const mx = clientX - rect.left;
-      const my = clientY - rect.top;
-      return isInside(petBoxAt(x, y), mx, my);
-    };
-    const handlePointerDown = (e: PointerEvent) => {
-      if (!isPetAt(e.clientX, e.clientY)) return;
-
-      const rect = canvas.getBoundingClientRect();
-      const mx = e.clientX - rect.left;
-      const my = e.clientY - rect.top;
-      isDragging = true;
-      dragMoved = false;
-      pointerStartX = e.clientX;
-      pointerStartY = e.clientY;
-      isWalking = false;
-      stateTimer = 0;
-      dragOffsetX = mx - x;
-      dragOffsetY = my - y;
-      canvas.setPointerCapture(e.pointerId);
-      canvas.style.cursor = "grabbing";
-      e.preventDefault();
-    };
-    const handlePointerMove = (e: PointerEvent) => {
-      if (!isDragging) return;
-
-      if (
-        Math.hypot(e.clientX - pointerStartX, e.clientY - pointerStartY) > 5
-      ) {
-        dragMoved = true;
-      }
-      if (!dragMoved) return;
-
-      const nextWindowX = e.screenX - (x + dragOffsetX);
-      const nextWindowY = e.screenY - (y + dragOffsetY);
-      if (window.desktopBuddy) {
-        window.desktopBuddy.moveWindow(nextWindowX, nextWindowY);
-      } else {
-        const rect = canvas.getBoundingClientRect();
-        x = Math.max(
-          0,
-          Math.min(e.clientX - rect.left - dragOffsetX, canvas.width - SIZE),
-        );
-        y = Math.max(
-          0,
-          Math.min(e.clientY - rect.top - dragOffsetY, canvas.height - SIZE),
-        );
-      }
-      e.preventDefault();
-    };
-    const handlePointerUp = (e: PointerEvent) => {
-      if (!isDragging) return;
-
-      isDragging = false;
-      if (canvas.hasPointerCapture(e.pointerId)) {
-        canvas.releasePointerCapture(e.pointerId);
-      }
-      if (!dragMoved) {
+    const bridge = window.desktopBuddy;
+    const engine = startPetEngine({
+      canvas,
+      stage,
+      pet: PETS[activePet],
+      size: SIZE,
+      start: positionRef.current,
+      entrance: entranceRef.current,
+      isWorking: () => workingRef.current,
+      onHitBoxChange: (box) => {
+        petBoxRef.current = box;
+        // the buddy may have walked under a pointer that is not moving
+        refreshClickThrough();
+      },
+      onClick: () => {
         // a stale hide error should not greet the next menu opening
         setHideError("");
         setMenuOpen((open) => !open);
-      }
-      canvas.style.cursor = isHovering ? "pointer" : "default";
-      stateTimer = 0;
-    };
-    canvas.addEventListener("mousemove", handleMouseMove);
-    canvas.addEventListener("mouseleave", handleMouseLeave);
-    canvas.addEventListener("dblclick", handleDoubleClick);
-    canvas.addEventListener("pointerdown", handlePointerDown);
-    canvas.addEventListener("pointermove", handlePointerMove);
-    canvas.addEventListener("pointerup", handlePointerUp);
-    canvas.addEventListener("pointercancel", handlePointerUp);
-
-    const shownState = (): PetState => {
-      if (controlRef.current.drinkLeft > 0) return "drink";
-      if (controlRef.current.work) return "work";
-      if (isHovering) return "heart";
-      return "idle";
-    };
-
-    const loop = (time: number) => {
-      raf = requestAnimationFrame(loop);
-      const dt = prevTime ? Math.min(time - prevTime, 100) : 16;
-      prevTime = time;
-
-      const state = shownState();
-
-      if (state !== lastState) {
-        frame = 0;
-        lastState = state;
-      }
-      if (time - lastAnimTime > pet.frameMs[state]) {
-        frame = (frame + 1) % pet.frameCount[state];
-        lastAnimTime = time;
-      }
-
-      if (controlRef.current.drinkLeft > 0) {
-        controlRef.current.drinkLeft -= dt;
-        if (controlRef.current.drinkLeft <= 0) controlRef.current.drinkLeft = 0;
-      }
-
-      stateTimer += dt;
-      if (state === "idle" && !isHovering && !isDragging) {
-        if (isWalking) {
-          const dir = targetX > x ? 1 : -1;
-          x += dir * 0.4;
-          if (Math.abs(x - targetX) < 2 || stateTimer > 4000) {
-            isWalking = false;
-            stateTimer = 0;
-          }
-          x = Math.max(0, Math.min(x, canvas.width - SIZE));
-        } else {
-          if (stateTimer > 5000 + Math.random() * 4000) {
-            isWalking = true;
-            stateTimer = 0;
-            targetX = Math.random() * (canvas.width - SIZE - 20) + 10;
-            if (Math.abs(targetX - x) < 80) {
-              isWalking = false;
-              stateTimer = 0;
-            }
-          }
-        }
-      }
-
-      // safety clamp: never let the buddy go below screen
-      y = Math.max(0, Math.min(y, groundY));
-      positionRef.current = { x, y };
-      const previousBox = petBoxRef.current;
-      const nextBox = petBoxAt(x, y);
-      if (
-        !previousBox ||
-        previousBox.x !== nextBox.x ||
-        previousBox.y !== nextBox.y ||
-        previousBox.width !== nextBox.width ||
-        previousBox.height !== nextBox.height
-      ) {
-        petBoxRef.current = nextBox;
-        // the buddy may have walked under a pointer that is not moving
-        refreshClickThrough();
-      }
-
-      // repaint only when pixels can actually change - constant repainting
-      // of a transparent window keeps the compositor busy and feels laggy
-      const paintKey = `${state}:${frame}:${Math.round(x)}:${Math.round(y)}`;
-      if (paintKey === lastPaintKey) return;
-      lastPaintKey = paintKey;
-
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const img = images[state];
-      if (img.complete) {
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(
-          img,
-          frame * PET_FRAME_SIZE,
-          0,
-          PET_FRAME_SIZE,
-          PET_FRAME_SIZE,
-          x,
-          y,
-          SIZE,
-          SIZE,
-        );
-      }
-    };
-
-    images.idle.onload = () => {
-      if (!disposed) raf = requestAnimationFrame(loop);
-    };
+      },
+      moveWindow: bridge ? (x, y) => bridge.moveWindow(x, y) : undefined,
+    });
+    engineRef.current = engine;
+    // the first buddy drops in; switching buddies or finishing a rename poofs
+    entranceRef.current = "poof";
 
     return () => {
-      disposed = true;
-      window.removeEventListener("resize", resize);
-      canvas.removeEventListener("mousemove", handleMouseMove);
-      canvas.removeEventListener("mouseleave", handleMouseLeave);
-      canvas.removeEventListener("dblclick", handleDoubleClick);
-      canvas.removeEventListener("pointerdown", handlePointerDown);
-      canvas.removeEventListener("pointermove", handlePointerMove);
-      canvas.removeEventListener("pointerup", handlePointerUp);
-      canvas.removeEventListener("pointercancel", handlePointerUp);
-      if (petTimeout) clearTimeout(petTimeout);
-      cancelAnimationFrame(raf);
+      // positionRef keeps a pet switch from teleporting the buddy
+      positionRef.current = engine.dispose();
+      engineRef.current = null;
       petBoxRef.current = null;
     };
-    // re-run when the pet view mounts or the chosen buddy changes;
-    // positionRef keeps a switch from teleporting the pet
   }, [petReady, activePet, refreshClickThrough]);
+
+  // Nothing on the canvas should run while the window is hidden or asleep.
+  // Electron reports a hidden window as visible (background throttling is
+  // off for the water timers), so listen for the main-process events too.
+  useEffect(() => {
+    const bridge = window.desktopBuddy;
+    const setVisible = (visible: boolean) =>
+      engineRef.current?.setVisible(visible);
+    const onVisibility = () => setVisible(!document.hidden);
+    document.addEventListener("visibilitychange", onVisibility);
+    const offHidden = bridge?.onWindowHidden(() => setVisible(false));
+    const offShown = bridge?.onWindowShown(() => setVisible(true));
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      offHidden?.();
+      offShown?.();
+    };
+  }, []);
 
   const refreshReminderList = async () => {
     setReminders(await db.reminders.orderBy("remindAt").toArray());
@@ -815,7 +631,7 @@ export default function App() {
     if (longBreakNotified.current === activeWork.id) return;
     longBreakNotified.current = activeWork.id;
 
-    const elapsed = formatDuration(workElapsedMs);
+    const elapsed = formatDuration(workElapsedAt(activeWork, Date.now()));
     showBubble(
       `you've been working on ${activeWork.task} for ${elapsed}. maybe stretch for a minute?`,
       9000,
@@ -827,13 +643,7 @@ export default function App() {
     void acknowledgeLongReminder().catch((error) => {
       console.error("Could not save the work break reminder", error);
     });
-  }, [
-    activeWork,
-    longBreakDue,
-    workElapsedMs,
-    acknowledgeLongReminder,
-    showBubble,
-  ]);
+  }, [activeWork, longBreakDue, acknowledgeLongReminder, showBubble]);
 
   const toggleAlwaysOnTop = () => {
     const next = !alwaysOnTop;
@@ -890,7 +700,8 @@ export default function App() {
 
   const saveWaterPlan = async (settings: WaterSettings) => {
     await water.savePlan(settings);
-    controlRef.current.drinkLeft = 1600;
+    engineRef.current?.drink(1600);
+    engineRef.current?.react("happy");
     const quiet = settings.quietHours.enabled
       ? " quiet hours are saved too."
       : "";
@@ -917,6 +728,7 @@ export default function App() {
   const drankFromPrompt = () =>
     runWaterAction(async () => {
       const total = await water.drank();
+      engineRef.current?.react("happy");
       showBubble(`logged! that's ${total} ml today. proud of you.`);
     });
 
@@ -939,6 +751,7 @@ export default function App() {
 
   const startWork = async (task: string) => {
     await work.start(task);
+    engineRef.current?.react("happy");
     showBubble(`focus mode on: ${task.trim()}. i'll keep time.`, 5000);
   };
 
@@ -1027,49 +840,33 @@ export default function App() {
     );
   }
 
+  const openPanel = (open: () => void) => {
+    open();
+    setMenuOpen(false);
+  };
+  const showBubbles = !menuOpen && (water.prompt || welcome);
+
   return (
-    <div style={{ position: "relative", width: "100vw", height: "100vh" }}>
-      <canvas ref={canvasRef} style={{ display: "block" }} />
+    <div ref={stageRef} className="buddy-stage">
+      <canvas ref={canvasRef} className="buddy-canvas" />
 
-      {!menuOpen && (
-        <button
-          type="button"
-          className="buddy-pin"
-          aria-label="Always on top"
-          aria-pressed={alwaysOnTop}
-          title={
-            alwaysOnTop
-              ? "Always on top is on. Turn it off to let full-screen apps and games cover the buddy."
-              : "Always on top is off. Turn it on to keep the buddy above other windows."
-          }
-          onClick={toggleAlwaysOnTop}
-        >
-          <span className="buddy-pin__dot" aria-hidden="true" />
-          on top
-        </button>
-      )}
-
-      {(water.prompt || welcome) && (
+      {showBubbles && (
         <div
-          style={{
-            position: "absolute",
-            // keep a scheduled nudge below an open menu instead of covering it
-            top: menuOpen ? 106 : 8,
-            left: 8,
-            zIndex: 15,
-            maxWidth: "calc(100% - 16px)",
-            display: "grid",
-            justifyItems: "start",
-            gap: 6,
-          }}
+          className={`buddy-pop buddy-say${water.prompt ? " buddy-say--water" : ""}`}
+          role="status"
         >
-          {water.prompt && (
-            <div className="buddy-bubble buddy-bubble--water">
-              <div className="buddy-bubble__head">
-                <span className="buddy-bubble__tag">water break</span>
+          {water.prompt ? (
+            <>
+              <div className="buddy-say__head">
+                <span className="buddy-say__tag">
+                  <PixelIcon name="water" size={11} /> water break
+                </span>
+                <span className="buddy-say__meta">
+                  {water.prompt.totalMl} ml today
+                </span>
                 <button
                   type="button"
-                  className="buddy-close buddy-bubble__close"
+                  className="buddy-close buddy-say__close"
                   aria-label="Dismiss water nudge"
                   title="Dismiss"
                   disabled={waterAction.pending}
@@ -1078,150 +875,139 @@ export default function App() {
                   ×
                 </button>
               </div>
-              <p className="buddy-bubble__text">{water.prompt.message}</p>
-              <p className="buddy-bubble__meta">
-                {water.prompt.amountMl} ml now · {water.prompt.totalMl} ml today
-              </p>
-              <div className="buddy-bubble__actions">
+              <p className="buddy-say__text">{water.prompt.message}</p>
+              {/* A failed water action leaves its prompt up, so its message
+                  shows under the nudge instead of replacing it out of sight. */}
+              {welcome && <p className="buddy-say__note">{welcome}</p>}
+              <div className="buddy-say__actions">
                 <button
                   type="button"
-                  className="buddy-mini-btn"
+                  className="buddy-chip buddy-chip--primary"
                   disabled={waterAction.pending}
                   onClick={() => void drankFromPrompt()}
                 >
-                  drank it
+                  drank {water.prompt.amountMl} ml
                 </button>
                 <button
                   type="button"
-                  className="buddy-mini-btn"
+                  className="buddy-chip"
                   disabled={waterAction.pending}
                   onClick={() => void snoozeWater()}
                 >
-                  10 min
+                  in 10 min
                 </button>
                 <button
                   type="button"
-                  className="buddy-mini-btn buddy-mini-btn--quiet"
+                  className="buddy-chip buddy-chip--quiet"
                   disabled={waterAction.pending}
                   onClick={() => void turnOffWater()}
                 >
                   stop nudges
                 </button>
               </div>
-            </div>
+            </>
+          ) : (
+            <p className="buddy-say__text">{welcome}</p>
           )}
-          {/* A failed water action leaves its prompt up, so the message has to
-              sit under that bubble instead of replacing it out of sight. */}
-          {welcome && <div className="buddy-bubble">{welcome}</div>}
         </div>
       )}
 
-      {work.active && (
-        <div
-          className={`buddy-timer${work.active.pausedAt !== undefined ? " buddy-timer--paused" : ""}`}
-          title={`${work.active.pausedAt !== undefined ? "paused" : "working"} on ${work.active.task}`}
-        >
-          <span className="buddy-timer__clock">
-            {formatClock(work.elapsedMs)}
-          </span>
-          <span className="buddy-timer__task">
-            {work.active.task}
-            {work.active.pausedAt !== undefined ? " · paused" : ""}
-          </span>
-        </div>
-      )}
-
-      <div
-        style={{ position: "absolute", top: 8, left: 8, right: 8, zIndex: 10 }}
-      >
-        {menuOpen && (
-          <div className="buddy-menu">
-            {hideError && (
-              <p className="buddy-menu__error" role="alert">
-                {hideError}
-              </p>
-            )}
+      {menuOpen && (
+        <div className="buddy-pop buddy-menu" role="menu" aria-label={`${profile.petName}'s menu`}>
+          {hideError && (
+            <p className="buddy-menu__error" role="alert">
+              {hideError}
+            </p>
+          )}
+          <div className="buddy-menu__tiles">
+            <MenuTile
+              icon="water"
+              label="Water"
+              autoFocus
+              onClick={() => openPanel(() => setWaterOpen(true))}
+            />
+            <MenuTile
+              icon="work"
+              label={work.active ? "Working" : "Focus"}
+              active={work.active !== null}
+              onClick={() => openPanel(() => setWorkOpen(true))}
+            />
+            <MenuTile
+              icon="bell"
+              label="Reminders"
+              onClick={() => openPanel(() => setReminderOpen(true))}
+            />
+            <MenuTile
+              icon="moon"
+              label="Sleep"
+              onClick={() => openPanel(() => setSleepOpen(true))}
+            />
+          </div>
+          <div className="buddy-menu__more">
             <button
               type="button"
-              className="buddy-menu__button"
-              onClick={() => {
-                setWaterOpen(true);
-                setMenuOpen(false);
-              }}
-            >
-              Drink water
-            </button>
-            <button
-              type="button"
-              className="buddy-menu__button"
-              onClick={() => {
-                setWorkOpen(true);
-                setMenuOpen(false);
-              }}
-            >
-              {work.active ? "Working…" : "Work mode"}
-            </button>
-            <button
-              type="button"
-              className="buddy-menu__button"
-              onClick={() => {
-                setReminderOpen(true);
-                setMenuOpen(false);
-              }}
-            >
-              Reminders
-            </button>
-            <button
-              type="button"
-              className="buddy-menu__button"
-              onClick={() => {
-                setSleepOpen(true);
-                setMenuOpen(false);
-              }}
-            >
-              Sleep
-            </button>
-            <button
-              type="button"
-              className="buddy-menu__button"
-              onClick={() => {
-                setProfileError("");
-                setRenaming(true);
-                setMenuOpen(false);
-              }}
+              role="menuitem"
+              className="buddy-link"
+              onClick={() =>
+                openPanel(() => {
+                  setProfileError("");
+                  setRenaming(true);
+                })
+              }
             >
               Rename
             </button>
             <button
               type="button"
-              className="buddy-menu__button"
-              onClick={() => {
-                setProfileError("");
-                setChangingPet(true);
-                setMenuOpen(false);
-              }}
+              role="menuitem"
+              className="buddy-link"
+              onClick={() =>
+                openPanel(() => {
+                  setProfileError("");
+                  setChangingPet(true);
+                })
+              }
             >
               Change pet
             </button>
             <button
               type="button"
-              className="buddy-menu__button"
-              title="Hide in the system tray. Click the tray icon to bring me back."
-              onClick={hideBuddy}
+              role="menuitemcheckbox"
+              className="buddy-link buddy-link--toggle"
+              aria-checked={alwaysOnTop}
+              title={
+                alwaysOnTop
+                  ? "Always on top is on. Turn it off to let full-screen apps and games cover the buddy."
+                  : "Always on top is off. Turn it on to keep the buddy above other windows."
+              }
+              onClick={toggleAlwaysOnTop}
             >
-              Hide buddy
+              <span className="buddy-link__dot" aria-hidden="true" />
+              On top
             </button>
             <button
               type="button"
-              className="buddy-menu__button buddy-menu__button--exit"
+              role="menuitem"
+              className="buddy-link"
+              title="Hide in the system tray. Click the tray icon to bring me back."
+              onClick={hideBuddy}
+            >
+              Hide
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="buddy-link buddy-link--danger"
               title="Quit Desktop Buddy"
               onClick={() => window.desktopBuddy?.exitApp()}
             >
               Quit
             </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {work.active && <WorkTag active={work.active} />}
 
       {reminderOpen && (
         <ReminderPanel
@@ -1300,7 +1086,6 @@ export default function App() {
       {workOpen && (
         <WorkPanel
           active={work.active}
-          elapsedMs={work.elapsedMs}
           totals={work.totals}
           recent={work.recent}
           onStart={startWork}
@@ -1355,6 +1140,54 @@ export default function App() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function MenuTile({
+  icon,
+  label,
+  active = false,
+  autoFocus = false,
+  onClick,
+}: {
+  icon: "water" | "work" | "bell" | "moon";
+  label: string;
+  active?: boolean;
+  autoFocus?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      className={`buddy-tile${active ? " buddy-tile--active" : ""}`}
+      autoFocus={autoFocus}
+      onClick={onClick}
+    >
+      <PixelIcon name={icon} size={20} />
+      <span>{label}</span>
+    </button>
+  );
+}
+
+/** Name-tag under the buddy's feet; only this tag ticks every second. */
+function WorkTag({ active }: { active: ActiveWork }) {
+  const paused = active.pausedAt !== undefined;
+  const now = useNow(1000, !paused);
+  return (
+    <div
+      className={`buddy-tag${paused ? " buddy-tag--paused" : ""}`}
+      title={`${paused ? "paused" : "working"} on ${active.task}`}
+    >
+      <span className="buddy-tag__dot" aria-hidden="true" />
+      <span className="buddy-tag__clock">
+        {formatClock(workElapsedAt(active, now))}
+      </span>
+      <span className="buddy-tag__task">
+        {active.task}
+        {paused ? " · paused" : ""}
+      </span>
     </div>
   );
 }

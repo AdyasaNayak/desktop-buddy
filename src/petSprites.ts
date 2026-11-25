@@ -27,3 +27,20 @@ export const PET_HIT_BOXES: Record<
   jellyfish: { x: 5, y: 5, w: 48, h: 46 },
   dog: { x: 16, y: 1, w: 37, h: 50 },
 };
+
+/**
+ * Visible pixels of the first idle frame: the buddy's body without the props
+ * or tail swings of other frames. The pet engine centers the ground shadow,
+ * the facing flip, and the speech bubble on this box, and the sheet test
+ * re-measures it from the PNGs.
+ */
+export const PET_BODY_BOXES: Record<
+  "cat" | "star" | "hamster" | "jellyfish" | "dog",
+  SpriteRect
+> = {
+  cat: { x: 11, y: 28, w: 20, h: 23 },
+  star: { x: 18, y: 22, w: 29, h: 27 },
+  hamster: { x: 16, y: 20, w: 29, h: 30 },
+  jellyfish: { x: 12, y: 16, w: 38, h: 35 },
+  dog: { x: 16, y: 23, w: 32, h: 27 },
+};

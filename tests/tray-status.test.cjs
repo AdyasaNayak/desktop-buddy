@@ -67,3 +67,17 @@ test("a paused timer is labeled as paused in the tray", () => {
 test("there is no work menu row without an active timer", () => {
   assert.equal(workStatusLabel(null), null);
 });
+
+test("the tray menu label is minute-precise so it is not rebuilt every second", () => {
+  const { formatWorkMinutes, workStatusMenuLabel } = require("../electron/tray-status.cjs");
+  assert.equal(formatWorkMinutes(0), "<1 min");
+  assert.equal(formatWorkMinutes(59_000), "<1 min");
+  assert.equal(formatWorkMinutes(342_000), "5 min");
+  assert.equal(formatWorkMinutes(3_942_000), "1 h 05 min");
+  assert.equal(
+    workStatusMenuLabel({ ...WORK, elapsedMs: 342_000 }),
+    workStatusMenuLabel({ ...WORK, elapsedMs: 359_000 }),
+  );
+  assert.equal(workStatusMenuLabel(WORK), "working: finish the report · 5 min");
+  assert.equal(workStatusMenuLabel(null), null);
+});

@@ -13,9 +13,8 @@ const INTERACTIVE_SELECTOR = [
   "textarea",
   "label",
   "[role='dialog']",
-  ".buddy-bubble",
-  ".buddy-menu",
-  ".buddy-timer",
+  ".buddy-pop",
+  ".buddy-tag",
 ].join(",");
 
 /**

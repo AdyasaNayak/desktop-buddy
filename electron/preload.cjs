@@ -1,7 +1,19 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
+// The main process passes startup values as arguments so the renderer does
+// not block its first paint on synchronous IPC. Older main processes did not
+// send them, so fall back to asking.
+function startupFlag(name) {
+  const prefix = `--${name}=`;
+  const arg = process.argv.find((value) => value.startsWith(prefix));
+  return arg === undefined ? undefined : arg.slice(prefix.length) === "1";
+}
+
+const isPackaged =
+  startupFlag("buddy-packaged") ?? ipcRenderer.sendSync("is-packaged");
+
 contextBridge.exposeInMainWorld("desktopBuddy", {
-  isPackaged: ipcRenderer.sendSync("is-packaged"),
+  isPackaged,
   getWindowPosition: () => ipcRenderer.sendSync("window-position"),
   getPointerPosition: () => ipcRenderer.sendSync("window-pointer"),
   getAlwaysOnTop: () => ipcRenderer.sendSync("get-always-on-top"),

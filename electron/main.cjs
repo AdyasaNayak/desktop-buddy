@@ -22,7 +22,7 @@ const { notifyHiddenWaterNudge } = require("./water-reminder.cjs");
 const {
   normalizeWorkStatus,
   trayTooltip,
-  workStatusLabel,
+  workStatusMenuLabel,
 } = require("./tray-status.cjs");
 const {
   notifyWindowHidden,
@@ -69,6 +69,9 @@ let launchHidden = DEFAULT_LAUNCH_HIDDEN;
 let startHiddenThisRun = false;
 const reminderTimers = new Map();
 const windowModes = new WeakMap();
+// Where move-window last put each window. The move event that setPosition
+// fires for it was already clamped and saved, so it can be skipped.
+const programmaticPositions = new WeakMap();
 const petWindowBounds = new WeakMap();
 
 function setupBounds(display) {
@@ -84,6 +87,14 @@ function setupBounds(display) {
   };
 }
 
+// screen.getAllDisplays() is a synchronous OS query. A drag asks for it on
+// every move, so keep the list until the display layout actually changes.
+let displaysCache;
+function allDisplays() {
+  if (!displaysCache) displaysCache = screen.getAllDisplays();
+  return displaysCache;
+}
+
 function displayForBounds(bounds) {
   const point = {
     x: bounds.x + bounds.width / 2,
@@ -93,7 +104,7 @@ function displayForBounds(bounds) {
   // the window's current monitor would clamp it before it could ever cross a
   // monitor boundary.
   return (
-    displayForPoint(screen.getAllDisplays(), point) ??
+    displayForPoint(allDisplays(), point) ??
     screen.getDisplayNearestPoint({
       x: Math.round(point.x),
       y: Math.round(point.y),
@@ -200,7 +211,7 @@ function loadPetPosition() {
   if (!saved) return null;
   // prefer the monitor the buddy was left on, then fall back to the nearest
   // one when that monitor is gone or the layout changed
-  return resolveWindowPosition(saved, screen.getAllDisplays(), PET_WINDOW);
+  return resolveWindowPosition(saved, allDisplays(), PET_WINDOW);
 }
 
 function flushWindowPosition() {
@@ -227,8 +238,11 @@ function savePetPosition(window, bounds = window.getBounds()) {
     y: bounds.y,
     displayId: displayForBounds(bounds).id,
   };
-  // coalesce the many moves that arrive during a drag into occasional writes
-  if (positionSaveTimer) return;
+  // Debounce, not throttle: a drag produces hundreds of moves, and the file
+  // only needs the position the buddy settles at. Writes are synchronous, so
+  // keeping them out of the drag keeps the main process responsive. Quit and
+  // close flush anything still pending.
+  clearTimeout(positionSaveTimer);
   positionSaveTimer = setTimeout(flushWindowPosition, POSITION_SAVE_DELAY);
 }
 
@@ -248,6 +262,8 @@ function keepWindowInWorkArea(window) {
   if (!window || window.isDestroyed()) return;
 
   const bounds = window.getBounds();
+  const placed = programmaticPositions.get(window);
+  if (placed && placed.x === bounds.x && placed.y === bounds.y) return;
   const clamped = clampToWorkArea(bounds);
   if (clamped.x !== bounds.x || clamped.y !== bounds.y) {
     window.setPosition(clamped.x, clamped.y);
@@ -318,18 +334,35 @@ function hideBuddy(window = buddyWindow) {
   return result.hidden;
 }
 
+let lastTrayTooltip;
+let lastTrayMenuKey;
+
+// A running work timer reports every second. Setting the same tooltip or
+// rebuilding an identical native menu every second is wasted work (and can
+// make an open tray menu flicker on Windows), so both only change when their
+// content does. The menu clock is minute-precise for the same reason; the
+// tooltip keeps the seconds.
 function updateTrayMenu() {
   if (!tray) return;
   const visible = Boolean(
     buddyWindow && !buddyWindow.isDestroyed() && buddyWindow.isVisible(),
   );
-  tray.setToolTip(trayTooltip({ visible, work: workStatus }));
+  const tooltip = trayTooltip({ visible, work: workStatus });
+  if (tooltip !== lastTrayTooltip) {
+    lastTrayTooltip = tooltip;
+    tray.setToolTip(tooltip);
+  }
+
+  const workLabel = workStatus ? workStatusMenuLabel(workStatus) : null;
+  const menuKey = JSON.stringify([visible, alwaysOnTop, launchHidden, workLabel]);
+  if (menuKey === lastTrayMenuKey) return;
+  lastTrayMenuKey = menuKey;
 
   const template = [];
-  if (workStatus) {
+  if (workLabel) {
     // keep the running timer visible in the tray menu while the buddy hides
     template.push(
-      { label: workStatusLabel(workStatus), enabled: false },
+      { label: workLabel, enabled: false },
       { type: "separator" },
     );
   }
@@ -367,6 +400,8 @@ function createTray() {
     if (icon.isEmpty()) return;
 
     tray = new Tray(icon);
+    lastTrayTooltip = undefined;
+    lastTrayMenuKey = undefined;
     tray.on("click", showBuddy);
     tray.on("double-click", showBuddy);
     updateTrayMenu();
@@ -398,6 +433,10 @@ function createWindow() {
       // Water nudges are checked by a timer in the renderer. A buddy hidden in
       // the tray still needs that timer to run on schedule.
       backgroundThrottling: false,
+      // A fixed startup value the preload would otherwise fetch with a
+      // blocking sendSync before the first paint. (Always-on-top can change
+      // between reloads, so it is still read live.)
+      additionalArguments: [`--buddy-packaged=${app.isPackaged ? "1" : "0"}`],
     },
   });
 
@@ -499,6 +538,9 @@ ipcMain.on("move-window", (event, x, y) => {
     },
     true,
   );
+  const current = window.getBounds();
+  if (current.x === bounds.x && current.y === bounds.y) return;
+  programmaticPositions.set(window, { x: bounds.x, y: bounds.y });
   window.setPosition(bounds.x, bounds.y);
   savePetPosition(window, bounds);
 });
@@ -727,7 +769,10 @@ if (!app.requestSingleInstanceLock()) {
       "display-removed",
       "display-metrics-changed",
     ]) {
-      screen.on(event, keepWindowOnScreen);
+      screen.on(event, () => {
+        displaysCache = undefined;
+        keepWindowOnScreen();
+      });
     }
 
     app.on("activate", showBuddy);

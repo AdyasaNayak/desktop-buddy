@@ -5,6 +5,7 @@ import {
   closeSession,
   elapsedWorkMs,
   isOpenSession,
+  LONG_SESSION_REMINDER_MS,
   longSessionReminderDue,
   MAX_WORK_TASK_LENGTH,
   pauseSession,
@@ -30,6 +31,20 @@ async function readLog(): Promise<WorkSession[]> {
   return db.workSessions.orderBy("startedAt").reverse().toArray();
 }
 
+/** A running session that has not had its break reminder yet. */
+function longSessionCanBecomeDue(session: WorkSession): boolean {
+  return (
+    isOpenSession(session) &&
+    session.pausedAt === undefined &&
+    session.longReminderAt === undefined
+  );
+}
+
+/** Elapsed work time for a session at `now` (0 without one). */
+export function workElapsedAt(active: ActiveWork | null, now: number): number {
+  return active ? elapsedWorkMs(active, now) : 0;
+}
+
 function toActive(session: WorkSession): ActiveWork | null {
   if (session.id === undefined) return null;
   return { ...session, id: session.id };
@@ -43,7 +58,10 @@ function toActive(session: WorkSession): ActiveWork | null {
 export function useWorkLog() {
   const [active, setActive] = useState<ActiveWork | null>(null);
   const [sessions, setSessions] = useState<WorkSession[]>([]);
-  const [now, setNow] = useState(() => Date.now());
+  // Which session the long-break reminder is due for. The running clock is not
+  // kept in state here: a ticking `now` at this level used to re-render the
+  // whole app every second. Components that show the clock use useNow.
+  const [longBreakDueFor, setLongBreakDueFor] = useState<number | null>(null);
   const activeRef = useRef<ActiveWork | null>(null);
   const timerBusy = useRef(false);
   const starting = useRef(false);
@@ -85,10 +103,7 @@ export function useWorkLog() {
         const saved = await readLog();
         if (!alive) return;
         setSessions(saved);
-        if (resumed) {
-          setNow(Date.now());
-          setCurrentActive(toActive(resumed));
-        }
+        if (resumed) setCurrentActive(toActive(resumed));
       } catch (error) {
         console.error("Could not load the work log", error);
       }
@@ -103,7 +118,6 @@ export function useWorkLog() {
   useEffect(() => {
     // A paused timer has nothing to count and no changing heartbeat to save.
     if (!active || active.pausedAt !== undefined) return;
-    const tick = window.setInterval(() => setNow(Date.now()), 1000);
     const beat = window.setInterval(() => {
       const current = activeRef.current;
       if (
@@ -125,10 +139,24 @@ export function useWorkLog() {
         .catch((error) => console.error("Could not save work heartbeat", error));
     }, HEARTBEAT_MS);
     return () => {
-      window.clearInterval(tick);
       window.clearInterval(beat);
     };
   }, [active, setCurrentActive]);
+
+  // One timeout for the long-session break instead of checking every second.
+  // The state is only written from the timer; whether it still applies (not
+  // paused, not acknowledged) is derived below.
+  useEffect(() => {
+    if (!active || !longSessionCanBecomeDue(active)) return;
+    const wait = LONG_SESSION_REMINDER_MS - elapsedWorkMs(active, Date.now());
+    const timer = window.setTimeout(() => {
+      if (longSessionReminderDue(active, Date.now())) {
+        setLongBreakDueFor(active.id);
+      }
+      // otherwise the 15 s heartbeat updates `active` and re-runs this check
+    }, Math.max(0, wait) + 50);
+    return () => window.clearTimeout(timer);
+  }, [active]);
 
   const start = useCallback(async (task: string) => {
     const trimmed = task.trim();
@@ -160,7 +188,6 @@ export function useWorkLog() {
           heartbeatAt: startedAt,
         });
       });
-      setNow(startedAt);
       setCurrentActive({
         id,
         task: trimmed,
@@ -209,7 +236,6 @@ export function useWorkLog() {
         pausedAt: paused.pausedAt,
         heartbeatAt: paused.heartbeatAt,
       });
-      setNow(at);
       setCurrentActive({ ...paused, id: current.id });
     } finally {
       timerBusy.current = false;
@@ -231,7 +257,6 @@ export function useWorkLog() {
         pausedAt: undefined,
         heartbeatAt: resumed.heartbeatAt,
       });
-      setNow(at);
       setCurrentActive({ ...resumed, id: current.id });
     } finally {
       timerBusy.current = false;
@@ -284,10 +309,10 @@ export function useWorkLog() {
     [sessions],
   );
 
-  const elapsedMs = active ? elapsedWorkMs(active, now) : 0;
-  const longBreakDue = active
-    ? longSessionReminderDue(active, now)
-    : false;
+  const longBreakDue =
+    active !== null &&
+    longBreakDueFor === active.id &&
+    longSessionCanBecomeDue(active);
 
   const totals = useMemo(() => {
     const grouped = new Map<string, TaskTotal>();
@@ -318,7 +343,6 @@ export function useWorkLog() {
 
   return {
     active,
-    elapsedMs,
     longBreakDue,
     totals,
     recent,

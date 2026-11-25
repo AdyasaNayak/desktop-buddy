@@ -9,6 +9,7 @@ const {
   petHitBox,
 } = require("../src/clickThrough.ts");
 const {
+  PET_BODY_BOXES,
   PET_FRAME_SIZE,
   PET_HIT_BOXES,
 } = require("../src/petSprites.ts");
@@ -160,4 +161,29 @@ for (const pet of PET_TYPES) {
       );
     });
   }
+}
+
+for (const pet of PET_TYPES) {
+  test(`${pet} body box matches the first idle frame`, () => {
+    const { width, pixels } = readRgbaPng(path.join(ASSETS, `${pet}.png`));
+    let minX = PET_FRAME_SIZE;
+    let minY = PET_FRAME_SIZE;
+    let maxX = -1;
+    let maxY = -1;
+    for (let y = 0; y < PET_FRAME_SIZE; y += 1) {
+      for (let x = 0; x < PET_FRAME_SIZE; x += 1) {
+        if (pixels[(y * width + x) * 4 + 3] === 0) continue;
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+      }
+    }
+    assert.deepEqual(PET_BODY_BOXES[pet], {
+      x: minX,
+      y: minY,
+      w: maxX - minX + 1,
+      h: maxY - minY + 1,
+    });
+  });
 }

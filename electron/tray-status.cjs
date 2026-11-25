@@ -51,8 +51,29 @@ function workStatusLabel(work) {
   return `${workState(work)} · ${formatWorkClock(work.elapsedMs)}`;
 }
 
+/** Minute-precision clock for the tray menu: "<1 min", "42 min", "1 h 05 min". */
+function formatWorkMinutes(ms) {
+  const totalMinutes = Math.floor(Math.max(0, ms) / 60_000);
+  if (totalMinutes < 1) return "<1 min";
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours === 0) return `${minutes} min`;
+  return `${hours} h ${String(minutes).padStart(2, "0")} min`;
+}
+
+/**
+ * Tray-menu row for the running timer. Minute precision keeps the native menu
+ * from being rebuilt every second; the tooltip carries the seconds.
+ */
+function workStatusMenuLabel(work) {
+  if (!work) return null;
+  return `${workState(work)} · ${formatWorkMinutes(work.elapsedMs)}`;
+}
+
 module.exports = {
   formatWorkClock,
+  formatWorkMinutes,
+  workStatusMenuLabel,
   normalizeWorkStatus,
   trayTooltip,
   workStatusLabel,
