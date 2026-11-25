@@ -629,6 +629,9 @@ ipcMain.on("window-mode", (event, mode) => {
   const wasVisible = window.isVisible();
   // A login launch stays in the tray until the user asks for the buddy.
   if (!wasVisible && !(mode === "pet" && startHiddenThisRun)) window.show();
+  // A pet that starts hidden never fires "hide", so tell the renderer now;
+  // otherwise its animation loop would keep running in an unseen window.
+  if (mode === "pet" && !window.isVisible()) notifyWindowHidden(window);
   // the pet view is transparent until the renderer finds an interactive part;
   // the setup window is opaque and keeps every click
   setClickThrough(window, mode === "pet");
