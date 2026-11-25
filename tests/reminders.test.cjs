@@ -15,7 +15,7 @@ const {
   selectExpiredFiredReminders,
   sortRemindersForList,
   toReminderRepeat,
-} = require("../src/reminders.ts");
+} = require("../src/lib/reminders.ts");
 
 test("reminders due when timers are restored are missed; later ones stay pending", () => {
   const restoredAt = 1_000_000;

@@ -9,7 +9,7 @@ const {
   withPointer,
   withPressed,
   withRemotePointer,
-} = require("../src/clickThrough.ts");
+} = require("../src/lib/clickThrough.ts");
 
 test("a pet view starts click-through before any pointer report", () => {
   assert.equal(

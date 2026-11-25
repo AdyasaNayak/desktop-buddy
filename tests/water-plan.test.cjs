@@ -10,19 +10,19 @@ const {
   timeValueToMinutes,
   waterGoalProgress,
   waterSettingsError,
-} = require("../src/waterOptions.ts");
+} = require("../src/lib/waterOptions.ts");
 const {
   isWithinQuietHours,
   nextReminderAfterQuietHours,
   quietHoursEnd,
-} = require("../src/waterSchedule.ts");
+} = require("../src/lib/waterSchedule.ts");
 const {
   groupWaterHistory,
   latestWaterEntryForDay,
   recentWaterHistory,
   waterHistoryDayLabel,
-} = require("../src/waterHistory.ts");
-const { dayKey } = require("../src/time.ts");
+} = require("../src/lib/waterHistory.ts");
+const { dayKey } = require("../src/lib/time.ts");
 
 const settings = (overrides = {}) => ({
   amountMl: 250,

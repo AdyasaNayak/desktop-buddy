@@ -7,12 +7,12 @@ const {
   isInside,
   isInteractivePoint,
   petHitBox,
-} = require("../src/clickThrough.ts");
+} = require("../src/lib/clickThrough.ts");
 const {
   PET_BODY_BOXES,
   PET_FRAME_SIZE,
   PET_HIT_BOXES,
-} = require("../src/petSprites.ts");
+} = require("../src/pet/petSprites.ts");
 
 const ASSETS = path.join(__dirname, "..", "src", "assets");
 const PET_TYPES = ["cat", "star", "hamster", "jellyfish", "dog"];

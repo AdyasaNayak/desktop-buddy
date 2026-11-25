@@ -1,13 +1,13 @@
 import { useEffect, useState, type FormEvent } from "react";
-import type { WaterEntry, WaterPlan } from "./db";
-import { dayKey, formatDuration, formatInterval, formatWhen } from "./time";
+import type { WaterEntry, WaterPlan } from "../../storage/db";
+import { dayKey, formatDuration, formatInterval, formatWhen } from "../../lib/time";
 import {
   WATER_HISTORY_LIMIT,
   groupWaterHistory,
   latestWaterEntryForDay,
   waterHistoryDayLabel,
-} from "./waterHistory";
-import { usePendingAction } from "./usePendingAction";
+} from "../../lib/waterHistory";
+import { usePendingAction } from "../../hooks/usePendingAction";
 import {
   AMOUNT_OPTIONS,
   DEFAULT_AMOUNT_ML,
@@ -31,8 +31,8 @@ import {
   withSavedOption,
   type QuietHours,
   type WaterSettings,
-} from "./waterOptions";
-import { isWithinQuietHours } from "./waterSchedule";
+} from "../../lib/waterOptions";
+import { isWithinQuietHours } from "../../lib/waterSchedule";
 
 const CUSTOM_CHOICE = "custom";
 

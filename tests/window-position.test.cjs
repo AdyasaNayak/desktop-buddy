@@ -10,7 +10,7 @@ const {
   resolveWindowPosition,
   snapToArea,
   writeWindowPosition,
-} = require("../electron/window-position.cjs");
+} = require("../electron/lib/window-position.cjs");
 
 const AREA = { x: 100, y: 50, width: 1000, height: 700 };
 const WINDOW = { width: 360, height: 260 };

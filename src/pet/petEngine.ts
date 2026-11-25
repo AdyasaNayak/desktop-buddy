@@ -1,4 +1,4 @@
-import { isInside, petHitBox, type Rect } from "./clickThrough";
+import { isInside, petHitBox, type Rect } from "../lib/clickThrough";
 import {
   GRAVITY,
   MAX_STEP_SECONDS,
@@ -301,7 +301,9 @@ export function startPetEngine(options: PetEngineOptions): PetEngine {
             ? "heart"
             : "idle";
     const dozing =
-      nextState === "idle" && !dragging && time - lastInteraction > DOZE_AFTER_MS;
+      nextState === "idle" &&
+      !dragging &&
+      time - lastInteraction > DOZE_AFTER_MS;
     if (nextState !== spriteState) {
       spriteState = nextState;
       frame = 0;
@@ -385,14 +387,27 @@ export function startPetEngine(options: PetEngineOptions): PetEngine {
     // springs
     squash = stepSpring(squash, 0, 320, 13, seconds);
     pop = stepSpring(pop, 1, 260, 16, seconds);
-    const tiltTarget = dragging && !reducedMotion ? dangleTilt(dragVelocityX) : 0;
+    const tiltTarget =
+      dragging && !reducedMotion ? dangleTilt(dragVelocityX) : 0;
     dragVelocityX *= Math.max(0, 1 - seconds * 6);
     tilt = stepSpring(tilt, tiltTarget, 140, 9, seconds);
 
     // emotes
     const head = y + headY - air;
-    if (spriteState === "heart" && hovering && !dragging && time >= nextHeartAt) {
-      spawn("heart", centerX() + (Math.random() * 40 - 20), head + 6, 0, -34, 1.3);
+    if (
+      spriteState === "heart" &&
+      hovering &&
+      !dragging &&
+      time >= nextHeartAt
+    ) {
+      spawn(
+        "heart",
+        centerX() + (Math.random() * 40 - 20),
+        head + 6,
+        0,
+        -34,
+        1.3,
+      );
       nextHeartAt = time + 750;
     }
     if (dozing && time >= nextZAt) {
@@ -400,7 +415,15 @@ export function startPetEngine(options: PetEngineOptions): PetEngine {
       nextZAt = time + 2400;
     }
     if (spriteState === "drink" && time >= nextDropAt) {
-      spawn("drop", centerX() - 10 + Math.random() * 20, head + 10, 0, -26, 0.9, 2);
+      spawn(
+        "drop",
+        centerX() - 10 + Math.random() * 20,
+        head + 10,
+        0,
+        -26,
+        0.9,
+        2,
+      );
       nextDropAt = time + 650;
     }
     for (let i = particles.length - 1; i >= 0; i -= 1) {
@@ -448,8 +471,7 @@ export function startPetEngine(options: PetEngineOptions): PetEngine {
     const hopLift = hop
       ? hopHeight((time - hop.start) / hop.duration, hop.height)
       : 0;
-    const gait =
-      mode === "walk" && !reducedMotion ? gaitLift(gaitPhase, 3) : 0;
+    const gait = mode === "walk" && !reducedMotion ? gaitLift(gaitPhase, 3) : 0;
     const lift = air + hopLift + gait;
     const sy = (1 + squash.value) * pop.value;
     const sx = (1 - squash.value * 0.6) * pop.value;
@@ -527,7 +549,11 @@ export function startPetEngine(options: PetEngineOptions): PetEngine {
   const drawParticle = (particle: Particle) => {
     const rows = BITMAPS[particle.kind];
     const { fill, edge } = COLORS[particle.kind];
-    const fade = Math.min(1, particle.life / 0.35, (particle.maxLife - particle.life) / 0.12 + 0.2);
+    const fade = Math.min(
+      1,
+      particle.life / 0.35,
+      (particle.maxLife - particle.life) / 0.12 + 0.2,
+    );
     ctx.globalAlpha = Math.max(0, Math.min(1, fade));
     const c = particle.cell;
     const left = Math.round(particle.x - (rows[0].length * c) / 2);
@@ -605,7 +631,14 @@ export function startPetEngine(options: PetEngineOptions): PetEngine {
         rubDistance = 0;
         rubSince = time;
         for (let i = 0; i < 3; i += 1) {
-          spawn("heart", centerX() - 24 + i * 24, y + headY, (i - 1) * 18, -48, 1.4);
+          spawn(
+            "heart",
+            centerX() - 24 + i * 24,
+            y + headY,
+            (i - 1) * 18,
+            -48,
+            1.4,
+          );
         }
         if (!hop) startHop(10, 300);
       }
@@ -636,7 +669,10 @@ export function startPetEngine(options: PetEngineOptions): PetEngine {
     pointerId = event.pointerId;
     dragging = false;
     dragStart = { x: event.clientX, y: event.clientY };
-    dragOffset = { x: event.clientX - rect.left - x, y: event.clientY - rect.top - y };
+    dragOffset = {
+      x: event.clientX - rect.left - x,
+      y: event.clientY - rect.top - y,
+    };
     lastScreenX = event.screenX;
     lastMoveAt = now();
     dragVelocityX = 0;
@@ -687,7 +723,10 @@ export function startPetEngine(options: PetEngineOptions): PetEngine {
       if (!moveFrame) moveFrame = requestAnimationFrame(flushMove);
     } else {
       const rect = canvas.getBoundingClientRect();
-      x = Math.max(0, Math.min(event.clientX - rect.left - dragOffset.x, width - size));
+      x = Math.max(
+        0,
+        Math.min(event.clientX - rect.left - dragOffset.x, width - size),
+      );
       const wantY = event.clientY - rect.top - dragOffset.y;
       air = Math.max(0, Math.min(groundY - wantY, groundY));
     }
@@ -757,7 +796,15 @@ export function startPetEngine(options: PetEngineOptions): PetEngine {
       const cy = y + (headY + feetY) / 2;
       for (let i = 0; i < 8; i += 1) {
         const angle = (i / 8) * Math.PI * 2;
-        spawn("sparkle", cx, cy, Math.cos(angle) * 70, Math.sin(angle) * 70, 0.6, 2);
+        spawn(
+          "sparkle",
+          cx,
+          cy,
+          Math.cos(angle) * 70,
+          Math.sin(angle) * 70,
+          0.6,
+          2,
+        );
       }
     }
   };
@@ -804,7 +851,14 @@ export function startPetEngine(options: PetEngineOptions): PetEngine {
       } else if (reaction === "happy") {
         startHop(18, 400);
         for (let i = 0; i < 3; i += 1) {
-          spawn("heart", centerX() - 20 + i * 20, y + headY, (i - 1) * 16, -44, 1.3);
+          spawn(
+            "heart",
+            centerX() - 20 + i * 20,
+            y + headY,
+            (i - 1) * 16,
+            -44,
+            1.3,
+          );
         }
       } else {
         if (!reducedMotion) squash = { value: -0.12, velocity: 0 };

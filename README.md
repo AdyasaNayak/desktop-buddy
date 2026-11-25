@@ -22,6 +22,13 @@ preview only the renderer in a browser, run `npm run dev` and open
 <http://localhost:5173>. In browser mode reminders fall back to the browser
 Notification API, or an alert when notification permission is not granted.
 
+Click the buddy to open its menu, drag it to carry it somewhere else (it
+dangles while you hold it and drops back down when you let go), and rub the
+pointer back and forth over it to pet it. It wanders, hops, turns toward your
+cursor, and dozes off when left alone for a few minutes. All of that motion is
+turned off when the system asks for reduced motion. Press **Esc** to close an
+open menu or panel.
+
 Drag the buddy to move it. Its position is saved when you quit and restored
 next time, including which monitor it was on. Dragging near a screen edge snaps
 the window flush against it, and if a monitor is unplugged or changes size, the
@@ -41,8 +48,8 @@ buddy is moved back onto an available screen instead of being left off-screen.
 
 ## Always on top
 
-The buddy stays above other windows by default. Click the **on top** pill in
-the top-right corner, or uncheck **Always on top** in the tray menu, when a
+The buddy stays above other windows by default. Turn off **On top** in the
+buddy's menu, or uncheck **Always on top** in the tray menu, when a
 full-screen game or video should cover it. The choice is saved and restored on
 the next launch.
 
@@ -86,7 +93,7 @@ and a desktop app cannot run code while it is closed.
   use **Launch hidden at login** in the tray menu to change that.
 
 The scheduling and catch-up logic lives in `electron/main.cjs` and
-`src/reminders.ts`.
+`src/lib/reminders.ts` (driven by `src/hooks/useReminders.ts`).
 
 ## Water breaks and hiding
 
@@ -137,10 +144,48 @@ the buddy is sleeping, the timer comes back paused.
 
 ## Project layout
 
-- `electron/` — Electron main process, preload bridge, and timer helpers
-- `src/` — React renderer: the pet, menus, reminders, water breaks, work log
-- `tests/` — Node tests for timer, click-through, and reminder logic
-- `website/` — separate landing-page project (see `website/README.md`)
+```text
+electron/
+  main.cjs            Electron main process: windows, tray, IPC, timers
+  preload.cjs         The safe `window.desktopBuddy` bridge for the renderer
+  lib/                Small main-process helpers (one concern per file,
+                      each covered by a test in tests/)
+src/
+  main.tsx            Renderer entry point
+  app/App.tsx         Top-level state and wiring for the pet window
+  components/         UI
+    buddy/            Speech bubble, menu, and work name tag around the pet
+    dialogs/          Sleep and pet-picker dialogs
+    panels/           Water, work, and reminder panels
+  hooks/              Stateful logic (work log, water, reminders, click-through)
+  pet/                Pet definitions, sprite boxes, and the canvas engine
+  lib/                Pure, framework-free logic (scheduling, formatting, ...)
+  storage/db.ts       IndexedDB schema (Dexie)
+  styles/             Global tokens/fonts and app styles
+  types/              Type of the preload bridge
+  assets/             Sprite sheets and bundled fonts
+tests/                Node tests for electron/lib, src/lib, and src/pet
+website/              Separate landing-page project (see website/README.md)
+```
+
+### The pet engine
+
+`src/pet/petEngine.ts` draws the buddy on a canvas and adds the procedural
+motion (shadow, hops, squash and stretch, dangling while carried, pixel
+emotes) on top of the sprite sheets. It is built to sit on the desktop all
+day without costing anything:
+
+- `requestAnimationFrame` only runs while something is moving. A resting
+  buddy sleeps until its next sprite frame is due.
+- It stops completely while the window is hidden or asleep.
+- Motion is time-based, so speed does not depend on the monitor's refresh
+  rate, and painting is capped at about 60 fps.
+- The canvas follows `devicePixelRatio`, so pixel art stays crisp at
+  125%/150% Windows scaling.
+- A drag sends at most one window move per frame to the main process.
+
+The timing and motion maths lives in `src/pet/petMotion.ts` and is tested in
+`tests/pet-motion.test.cjs`.
 
 ## Landing page
 

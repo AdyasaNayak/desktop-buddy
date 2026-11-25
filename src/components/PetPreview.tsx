@@ -1,4 +1,4 @@
-import { PET_FRAME_SIZE, PETS, type PetType } from "./pets";
+import { PET_FRAME_SIZE, PETS, type PetType } from "../pet/pets";
 
 export function PetPreview({
   pet,

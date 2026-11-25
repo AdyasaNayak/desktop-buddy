@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { PetPreview } from "./PetPreview";
-import { PETS, PET_PREVIEW_SIZE, PET_TYPES, type PetType } from "./pets";
+import { PETS, PET_PREVIEW_SIZE, PET_TYPES, type PetType } from "../pet/pets";
 
 export interface OnboardingResult {
   petType: PetType;

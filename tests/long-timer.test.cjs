@@ -4,7 +4,7 @@ const {
   MAX_TIMER_DELAY,
   setLongTimeout,
   clearLongTimeout,
-} = require("../electron/long-timer.cjs");
+} = require("../electron/lib/long-timer.cjs");
 
 /** Record the delays handed to the mocked setTimeout. */
 function recordDelays(t) {

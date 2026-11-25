@@ -5,7 +5,7 @@ const {
   normalizeWorkStatus,
   trayTooltip,
   workStatusLabel,
-} = require("../electron/tray-status.cjs");
+} = require("../electron/lib/tray-status.cjs");
 
 const WORK = { task: "finish the report", elapsedMs: 342_000, paused: false };
 
@@ -69,7 +69,7 @@ test("there is no work menu row without an active timer", () => {
 });
 
 test("the tray menu label is minute-precise so it is not rebuilt every second", () => {
-  const { formatWorkMinutes, workStatusMenuLabel } = require("../electron/tray-status.cjs");
+  const { formatWorkMinutes, workStatusMenuLabel } = require("../electron/lib/tray-status.cjs");
   assert.equal(formatWorkMinutes(0), "<1 min");
   assert.equal(formatWorkMinutes(59_000), "<1 min");
   assert.equal(formatWorkMinutes(342_000), "5 min");

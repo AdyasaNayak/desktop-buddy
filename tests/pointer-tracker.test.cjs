@@ -4,7 +4,7 @@ const {
   POINTER_POLL_MS,
   createPointerTracker,
   toWindowPoint,
-} = require("../electron/pointer-tracker.cjs");
+} = require("../electron/lib/pointer-tracker.cjs");
 
 const BOUNDS = { x: 100, y: 50, width: 360, height: 260 };
 

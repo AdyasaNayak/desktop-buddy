@@ -1,4 +1,4 @@
-import type { Reminder, ReminderRepeat } from "./db";
+import type { Reminder, ReminderRepeat } from "../storage/db";
 
 /** Reminders further out than this are almost always a typo. */
 export const MAX_REMINDER_AHEAD_MS = 365 * 24 * 60 * 60 * 1000;

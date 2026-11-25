@@ -12,7 +12,7 @@ const {
   springSettled,
   stepSpring,
   walkStep,
-} = require("../src/petMotion.ts");
+} = require("../src/pet/petMotion.ts");
 
 test("walking speed does not depend on the frame rate", () => {
   // one second of walking at 60 Hz and at 144 Hz covers the same ground
@@ -50,7 +50,8 @@ test("hops are parabolas that start and end on the ground", () => {
 
 test("springs settle back to their target", () => {
   let spring = { value: -0.2, velocity: 0 };
-  for (let i = 0; i < 120; i += 1) spring = stepSpring(spring, 0, 320, 13, 1 / 60);
+  for (let i = 0; i < 120; i += 1)
+    spring = stepSpring(spring, 0, 320, 13, 1 / 60);
   assert.ok(springSettled(spring));
   // a huge step is split up instead of exploding
   const big = stepSpring({ value: 1, velocity: 0 }, 0, 320, 13, 10);

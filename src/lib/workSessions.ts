@@ -1,4 +1,4 @@
-import type { WorkSession } from "./db";
+import type { WorkSession } from "../storage/db";
 
 /** Remind the user to take a break after a long stretch of work. */
 export const LONG_SESSION_REMINDER_MS = 90 * 60 * 1000;

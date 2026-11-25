@@ -9,26 +9,26 @@ const {
   screen,
 } = require("electron");
 const path = require("node:path");
-const { setLongTimeout, clearLongTimeout } = require("./long-timer.cjs");
-const { FORWARDS_MOUSE_MOVES, setClickThrough } = require("./click-through.cjs");
-const { hideBuddy: hideBuddyWindow } = require("./hide-buddy.cjs");
-const { showNotification } = require("./notifications.cjs");
+const { setLongTimeout, clearLongTimeout } = require("./lib/long-timer.cjs");
+const { FORWARDS_MOUSE_MOVES, setClickThrough } = require("./lib/click-through.cjs");
+const { hideBuddy: hideBuddyWindow } = require("./lib/hide-buddy.cjs");
+const { showNotification } = require("./lib/notifications.cjs");
 const {
   createPointerTracker,
   toWindowPoint,
-} = require("./pointer-tracker.cjs");
-const { sendToRenderer } = require("./renderer-message.cjs");
-const { notifyHiddenWaterNudge } = require("./water-reminder.cjs");
+} = require("./lib/pointer-tracker.cjs");
+const { sendToRenderer } = require("./lib/renderer-message.cjs");
+const { notifyHiddenWaterNudge } = require("./lib/water-reminder.cjs");
 const {
   normalizeWorkStatus,
   trayTooltip,
   workStatusMenuLabel,
-} = require("./tray-status.cjs");
+} = require("./lib/tray-status.cjs");
 const {
   notifyWindowHidden,
   notifyWindowShown,
   notifyWindowWake,
-} = require("./window-visibility.cjs");
+} = require("./lib/window-visibility.cjs");
 const {
   clampToArea,
   displayForPoint,
@@ -36,11 +36,11 @@ const {
   resolveWindowPosition,
   snapToArea,
   writeWindowPosition,
-} = require("./window-position.cjs");
+} = require("./lib/window-position.cjs");
 const {
   readAlwaysOnTop,
   writeAlwaysOnTop,
-} = require("./window-preferences.cjs");
+} = require("./lib/window-preferences.cjs");
 const {
   DEFAULT_LAUNCH_HIDDEN,
   applyLoginItemSettings,
@@ -50,7 +50,7 @@ const {
   reconcileLoginItem,
   wasLaunchedHidden,
   writeLaunchHidden,
-} = require("./startup.cjs");
+} = require("./lib/startup.cjs");
 
 const PET_WINDOW = { width: 360, height: 260 };
 const SETUP_WINDOW = { width: 460, height: 600 };
@@ -354,7 +354,12 @@ function updateTrayMenu() {
   }
 
   const workLabel = workStatus ? workStatusMenuLabel(workStatus) : null;
-  const menuKey = JSON.stringify([visible, alwaysOnTop, launchHidden, workLabel]);
+  const menuKey = JSON.stringify([
+    visible,
+    alwaysOnTop,
+    launchHidden,
+    workLabel,
+  ]);
   if (menuKey === lastTrayMenuKey) return;
   lastTrayMenuKey = menuKey;
 

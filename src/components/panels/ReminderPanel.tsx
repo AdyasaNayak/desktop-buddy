@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import type { Reminder, ReminderRepeat } from "./db";
+import type { Reminder, ReminderRepeat } from "../../storage/db";
 import {
   MAX_REMINDER_TEXT_LENGTH,
   REMINDER_REPEAT_OPTIONS,
@@ -10,9 +10,9 @@ import {
   toDateTimeLocalValue,
   toReminderRepeat,
   type ReminderDraft,
-} from "./reminders";
-import { formatWhen } from "./time";
-import { usePendingAction } from "./usePendingAction";
+} from "../../lib/reminders";
+import { formatWhen } from "../../lib/time";
+import { usePendingAction } from "../../hooks/usePendingAction";
 
 export function ReminderPanel({
   reminders,

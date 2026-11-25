@@ -1,8 +1,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { notifyHiddenWaterNudge } = require("../electron/water-reminder.cjs");
-const { waterNudgeNotice } = require("../src/waterMessages.ts");
-const { nextReminderAfterDismiss } = require("../src/waterSchedule.ts");
+const { notifyHiddenWaterNudge } = require("../electron/lib/water-reminder.cjs");
+const { waterNudgeNotice } = require("../src/lib/waterMessages.ts");
+const { nextReminderAfterDismiss } = require("../src/lib/waterSchedule.ts");
 
 const NUDGE = {
   title: "Desktop Buddy water break",

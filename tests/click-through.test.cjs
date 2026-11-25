@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { setClickThrough } = require("../electron/click-through.cjs");
+const { setClickThrough } = require("../electron/lib/click-through.cjs");
 
 function fakeWindow(destroyed = false) {
   const calls = [];

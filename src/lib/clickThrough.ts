@@ -1,4 +1,4 @@
-import { PET_FRAME_SIZE, type SpriteRect } from "./petSprites.ts";
+import { PET_FRAME_SIZE, type SpriteRect } from "../pet/petSprites.ts";
 
 export type Rect = { x: number; y: number; width: number; height: number };
 

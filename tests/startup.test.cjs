@@ -14,7 +14,7 @@ const {
   reconcileLoginItem,
   wasLaunchedHidden,
   writeLaunchHidden,
-} = require("../electron/startup.cjs");
+} = require("../electron/lib/startup.cjs");
 
 function fakeApp({
   packaged = true,
