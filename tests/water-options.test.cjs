@@ -5,8 +5,8 @@ const {
   INTERVAL_OPTIONS,
   amountLabel,
   withSavedOption,
-} = require("../src/waterOptions.ts");
-const { formatInterval } = require("../src/time.ts");
+} = require("../src/lib/waterOptions.ts");
+const { formatInterval } = require("../src/lib/time.ts");
 
 const mLabelled = (label) => Number(/\((\d+) ml\)$/.exec(label)?.[1]);
 

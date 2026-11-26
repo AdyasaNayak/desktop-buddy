@@ -4,7 +4,7 @@ const {
   notifyWindowHidden,
   notifyWindowShown,
   notifyWindowWake,
-} = require("../electron/window-visibility.cjs");
+} = require("../electron/lib/window-visibility.cjs");
 
 function fakeWindow({ destroyed = false, contentsDestroyed = false } = {}) {
   const sent = [];

@@ -1,20 +1,20 @@
 import { useState, type FormEvent } from "react";
-import type { WorkSession } from "./db";
-import { toDateTimeLocalValue } from "./reminders";
-import { formatClock, formatDuration, formatWhen } from "./time";
-import type { ActiveWork, TaskTotal } from "./useWorkLog";
-import { usePendingAction } from "./usePendingAction";
+import type { WorkSession } from "../../storage/db";
+import { toDateTimeLocalValue } from "../../lib/reminders";
+import { formatClock, formatDuration, formatWhen } from "../../lib/time";
+import { workElapsedAt, type ActiveWork, type TaskTotal } from "../../hooks/useWorkLog";
+import { useNow } from "../../hooks/useNow";
+import { usePendingAction } from "../../hooks/usePendingAction";
 import {
   LONG_SESSION_REMINDER_MS,
   MAX_SESSION_DURATION_MS,
   MAX_WORK_TASK_LENGTH,
   workSessionEditError,
   type WorkSessionEdit,
-} from "./workSessions";
+} from "../../lib/workSessions";
 
 export function WorkPanel({
   active,
-  elapsedMs,
   totals,
   recent,
   onStart,
@@ -27,7 +27,6 @@ export function WorkPanel({
   onClose,
 }: {
   active: ActiveWork | null;
-  elapsedMs: number;
   totals: TaskTotal[];
   recent: WorkSession[];
   onStart: (task: string) => Promise<void>;
@@ -50,6 +49,9 @@ export function WorkPanel({
   const timerAction = usePendingAction();
   const rowAction = usePendingAction();
   const busy = timerAction.pending || rowAction.pending;
+  // only this panel's clock ticks, not the whole buddy
+  const now = useNow(1000, active !== null && active.pausedAt === undefined);
+  const elapsedMs = workElapsedAt(active, now);
 
   const runTimer = (action: () => Promise<void>) =>
     timerAction.run(async () => {

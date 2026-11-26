@@ -1,6 +1,6 @@
 import Dexie, { type Table } from "dexie";
-import type { PetType } from "./pets";
-import type { QuietHours } from "./waterOptions";
+import type { PetType } from "../pet/pets";
+import type { QuietHours } from "../lib/waterOptions";
 
 export interface Profile {
   id: string;

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { db, type WorkSession } from "./db";
+import { db, type WorkSession } from "../storage/db";
 import {
   applyWorkSessionEdit,
   closeSession,
   elapsedWorkMs,
   isOpenSession,
+  LONG_SESSION_REMINDER_MS,
   longSessionReminderDue,
   MAX_WORK_TASK_LENGTH,
   pauseSession,
@@ -13,7 +14,7 @@ import {
   workSessionEditError,
   workSessionsToCsv,
   type WorkSessionEdit,
-} from "./workSessions";
+} from "../lib/workSessions";
 
 export type ActiveWork = WorkSession & { id: number };
 
@@ -30,6 +31,20 @@ async function readLog(): Promise<WorkSession[]> {
   return db.workSessions.orderBy("startedAt").reverse().toArray();
 }
 
+/** A running session that has not had its break reminder yet. */
+function longSessionCanBecomeDue(session: WorkSession): boolean {
+  return (
+    isOpenSession(session) &&
+    session.pausedAt === undefined &&
+    session.longReminderAt === undefined
+  );
+}
+
+/** Elapsed work time for a session at `now` (0 without one). */
+export function workElapsedAt(active: ActiveWork | null, now: number): number {
+  return active ? elapsedWorkMs(active, now) : 0;
+}
+
 function toActive(session: WorkSession): ActiveWork | null {
   if (session.id === undefined) return null;
   return { ...session, id: session.id };
@@ -43,7 +58,10 @@ function toActive(session: WorkSession): ActiveWork | null {
 export function useWorkLog() {
   const [active, setActive] = useState<ActiveWork | null>(null);
   const [sessions, setSessions] = useState<WorkSession[]>([]);
-  const [now, setNow] = useState(() => Date.now());
+  // Which session the long-break reminder is due for. The running clock is not
+  // kept in state here: a ticking `now` at this level used to re-render the
+  // whole app every second. Components that show the clock use useNow.
+  const [longBreakDueFor, setLongBreakDueFor] = useState<number | null>(null);
   const activeRef = useRef<ActiveWork | null>(null);
   const timerBusy = useRef(false);
   const starting = useRef(false);
@@ -62,9 +80,7 @@ export function useWorkLog() {
           "rw",
           db.workSessions,
           async () => {
-            const open = await db.workSessions
-              .filter(isOpenSession)
-              .toArray();
+            const open = await db.workSessions.filter(isOpenSession).toArray();
             const plan = planWorkStartup(open, Date.now());
             const handled = new Set<number>();
             if (plan.resume?.id !== undefined) handled.add(plan.resume.id);
@@ -85,10 +101,7 @@ export function useWorkLog() {
         const saved = await readLog();
         if (!alive) return;
         setSessions(saved);
-        if (resumed) {
-          setNow(Date.now());
-          setCurrentActive(toActive(resumed));
-        }
+        if (resumed) setCurrentActive(toActive(resumed));
       } catch (error) {
         console.error("Could not load the work log", error);
       }
@@ -103,7 +116,6 @@ export function useWorkLog() {
   useEffect(() => {
     // A paused timer has nothing to count and no changing heartbeat to save.
     if (!active || active.pausedAt !== undefined) return;
-    const tick = window.setInterval(() => setNow(Date.now()), 1000);
     const beat = window.setInterval(() => {
       const current = activeRef.current;
       if (
@@ -122,57 +134,78 @@ export function useWorkLog() {
       setCurrentActive({ ...current, durationMs, heartbeatAt: at });
       void db.workSessions
         .update(current.id, { heartbeatAt: at, durationMs })
-        .catch((error) => console.error("Could not save work heartbeat", error));
+        .catch((error) =>
+          console.error("Could not save work heartbeat", error),
+        );
     }, HEARTBEAT_MS);
     return () => {
-      window.clearInterval(tick);
       window.clearInterval(beat);
     };
   }, [active, setCurrentActive]);
 
-  const start = useCallback(async (task: string) => {
-    const trimmed = task.trim();
-    if (!trimmed) throw new Error("Tell me what you're working on first.");
-    if (trimmed.length > MAX_WORK_TASK_LENGTH) {
-      throw new Error(
-        `Task names are limited to ${MAX_WORK_TASK_LENGTH} characters.`,
-      );
-    }
-    if (starting.current) throw new Error("A timer is already starting.");
-    starting.current = true;
-    try {
-      // The first load reconciles timers left open by the previous run, so a
-      // start never races it and creates a second open session.
-      await loaded.current;
-      const startedAt = Date.now();
-      const id = await db.transaction("rw", db.workSessions, async () => {
-        const open = await db.workSessions.filter(isOpenSession).first();
-        if (open) {
-          throw new Error(
-            `A timer is already running for "${open.task}". Stop it first.`,
-          );
+  // One timeout for the long-session break instead of checking every second.
+  // The state is only written from the timer; whether it still applies (not
+  // paused, not acknowledged) is derived below.
+  useEffect(() => {
+    if (!active || !longSessionCanBecomeDue(active)) return;
+    const wait = LONG_SESSION_REMINDER_MS - elapsedWorkMs(active, Date.now());
+    const timer = window.setTimeout(
+      () => {
+        if (longSessionReminderDue(active, Date.now())) {
+          setLongBreakDueFor(active.id);
         }
-        return db.workSessions.add({
+        // otherwise the 15 s heartbeat updates `active` and re-runs this check
+      },
+      Math.max(0, wait) + 50,
+    );
+    return () => window.clearTimeout(timer);
+  }, [active]);
+
+  const start = useCallback(
+    async (task: string) => {
+      const trimmed = task.trim();
+      if (!trimmed) throw new Error("Tell me what you're working on first.");
+      if (trimmed.length > MAX_WORK_TASK_LENGTH) {
+        throw new Error(
+          `Task names are limited to ${MAX_WORK_TASK_LENGTH} characters.`,
+        );
+      }
+      if (starting.current) throw new Error("A timer is already starting.");
+      starting.current = true;
+      try {
+        // The first load reconciles timers left open by the previous run, so a
+        // start never races it and creates a second open session.
+        await loaded.current;
+        const startedAt = Date.now();
+        const id = await db.transaction("rw", db.workSessions, async () => {
+          const open = await db.workSessions.filter(isOpenSession).first();
+          if (open) {
+            throw new Error(
+              `A timer is already running for "${open.task}". Stop it first.`,
+            );
+          }
+          return db.workSessions.add({
+            task: trimmed,
+            startedAt,
+            durationMs: 0,
+            pausedMs: 0,
+            heartbeatAt: startedAt,
+          });
+        });
+        setCurrentActive({
+          id,
           task: trimmed,
           startedAt,
           durationMs: 0,
           pausedMs: 0,
           heartbeatAt: startedAt,
         });
-      });
-      setNow(startedAt);
-      setCurrentActive({
-        id,
-        task: trimmed,
-        startedAt,
-        durationMs: 0,
-        pausedMs: 0,
-        heartbeatAt: startedAt,
-      });
-    } finally {
-      starting.current = false;
-    }
-  }, [setCurrentActive]);
+      } finally {
+        starting.current = false;
+      }
+    },
+    [setCurrentActive],
+  );
 
   const stop = useCallback(async () => {
     const current = activeRef.current;
@@ -209,7 +242,6 @@ export function useWorkLog() {
         pausedAt: paused.pausedAt,
         heartbeatAt: paused.heartbeatAt,
       });
-      setNow(at);
       setCurrentActive({ ...paused, id: current.id });
     } finally {
       timerBusy.current = false;
@@ -231,7 +263,6 @@ export function useWorkLog() {
         pausedAt: undefined,
         heartbeatAt: resumed.heartbeatAt,
       });
-      setNow(at);
       setCurrentActive({ ...resumed, id: current.id });
     } finally {
       timerBusy.current = false;
@@ -250,24 +281,19 @@ export function useWorkLog() {
     }
   }, [setCurrentActive]);
 
-  const editSession = useCallback(
-    async (id: number, edit: WorkSessionEdit) => {
-      const problem = workSessionEditError(edit);
-      if (problem) throw new Error(problem);
+  const editSession = useCallback(async (id: number, edit: WorkSessionEdit) => {
+    const problem = workSessionEditError(edit);
+    if (problem) throw new Error(problem);
 
-      const existing = await db.workSessions.get(id);
-      if (!existing) throw new Error("That session no longer exists.");
-      if (isOpenSession(existing)) {
-        throw new Error("Stop the timer before editing this session.");
-      }
+    const existing = await db.workSessions.get(id);
+    if (!existing) throw new Error("That session no longer exists.");
+    if (isOpenSession(existing)) {
+      throw new Error("Stop the timer before editing this session.");
+    }
 
-      await db.workSessions.put(
-        applyWorkSessionEdit({ ...existing, id }, edit),
-      );
-      setSessions(await readLog());
-    },
-    [],
-  );
+    await db.workSessions.put(applyWorkSessionEdit({ ...existing, id }, edit));
+    setSessions(await readLog());
+  }, []);
 
   const deleteSession = useCallback(async (id: number) => {
     const existing = await db.workSessions.get(id);
@@ -279,15 +305,12 @@ export function useWorkLog() {
     setSessions(await readLog());
   }, []);
 
-  const exportCsv = useCallback(
-    () => workSessionsToCsv(sessions),
-    [sessions],
-  );
+  const exportCsv = useCallback(() => workSessionsToCsv(sessions), [sessions]);
 
-  const elapsedMs = active ? elapsedWorkMs(active, now) : 0;
-  const longBreakDue = active
-    ? longSessionReminderDue(active, now)
-    : false;
+  const longBreakDue =
+    active !== null &&
+    longBreakDueFor === active.id &&
+    longSessionCanBecomeDue(active);
 
   const totals = useMemo(() => {
     const grouped = new Map<string, TaskTotal>();
@@ -312,13 +335,13 @@ export function useWorkLog() {
   }, [sessions]);
 
   const recent = useMemo(
-    () => sessions.filter((session) => session.endedAt !== undefined).slice(0, 20),
+    () =>
+      sessions.filter((session) => session.endedAt !== undefined).slice(0, 20),
     [sessions],
   );
 
   return {
     active,
-    elapsedMs,
     longBreakDue,
     totals,
     recent,

@@ -10,7 +10,7 @@ import {
   withPressed,
   withRemotePointer,
   type Rect,
-} from "./clickThrough";
+} from "../lib/clickThrough";
 
 /**
  * Hands the transparent parts of the pet window back to the desktop.

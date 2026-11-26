@@ -1,24 +1,25 @@
-import catIdle from "./assets/cat.png";
-import catHeart from "./assets/catheart.png";
-import catDrink from "./assets/catdrink.png";
-import catWork from "./assets/catwork.png";
-import starIdle from "./assets/star.png";
-import starHeart from "./assets/starheart.png";
-import starDrink from "./assets/stardrink.png";
-import starWork from "./assets/starwork.png";
-import hamsterIdle from "./assets/hamster.png";
-import hamsterHeart from "./assets/hamsterheart.png";
-import hamsterDrink from "./assets/hamsterdrink.png";
-import hamsterWork from "./assets/hamsterwork.png";
-import jellyfishIdle from "./assets/jellyfish.png";
-import jellyfishHeart from "./assets/jellyfishheart.png";
-import jellyfishDrink from "./assets/jellyfishdrink.png";
-import jellyfishWork from "./assets/jellyfishwork.png";
-import dogIdle from "./assets/dog.png";
-import dogHeart from "./assets/dogheart.png";
-import dogDrink from "./assets/dogdrink.png";
-import dogWork from "./assets/dogwork.png";
+import catIdle from "../assets/cat.png";
+import catHeart from "../assets/catheart.png";
+import catDrink from "../assets/catdrink.png";
+import catWork from "../assets/catwork.png";
+import starIdle from "../assets/star.png";
+import starHeart from "../assets/starheart.png";
+import starDrink from "../assets/stardrink.png";
+import starWork from "../assets/starwork.png";
+import hamsterIdle from "../assets/hamster.png";
+import hamsterHeart from "../assets/hamsterheart.png";
+import hamsterDrink from "../assets/hamsterdrink.png";
+import hamsterWork from "../assets/hamsterwork.png";
+import jellyfishIdle from "../assets/jellyfish.png";
+import jellyfishHeart from "../assets/jellyfishheart.png";
+import jellyfishDrink from "../assets/jellyfishdrink.png";
+import jellyfishWork from "../assets/jellyfishwork.png";
+import dogIdle from "../assets/dog.png";
+import dogHeart from "../assets/dogheart.png";
+import dogDrink from "../assets/dogdrink.png";
+import dogWork from "../assets/dogwork.png";
 import {
+  PET_BODY_BOXES,
   PET_FRAME_SIZE,
   PET_HIT_BOXES,
   type SpriteRect,
@@ -40,6 +41,8 @@ export interface PetDefinition {
   preview: SpriteRect;
   /** Union of visible pixels across every animation sheet. */
   hitBox: SpriteRect;
+  /** Visible pixels of the first idle frame: where the body actually is. */
+  body: SpriteRect;
 }
 
 export const PET_TYPES: PetType[] = ["cat", "star", "hamster", "jellyfish", "dog"];
@@ -67,6 +70,7 @@ export const PETS: Record<PetType, PetDefinition> = {
     frameMs: { idle: 500, heart: 400, drink: 600, work: 300 },
     preview: { x: 6, y: 24, w: 36, h: 30 },
     hitBox: PET_HIT_BOXES.cat,
+    body: PET_BODY_BOXES.cat,
   },
   star: {
     label: "star",
@@ -82,6 +86,7 @@ export const PETS: Record<PetType, PetDefinition> = {
     frameMs: { idle: 600, heart: 700, drink: 800, work: 700 },
     preview: { x: 15, y: 18, w: 36, h: 32 },
     hitBox: PET_HIT_BOXES.star,
+    body: PET_BODY_BOXES.star,
   },
   hamster: {
     label: "hamster",
@@ -97,6 +102,7 @@ export const PETS: Record<PetType, PetDefinition> = {
     frameMs: { idle: 800, heart: 700, drink: 800, work: 700 },
     preview: { x: 15, y: 19, w: 32, h: 32 },
     hitBox: PET_HIT_BOXES.hamster,
+    body: PET_BODY_BOXES.hamster,
   },
   jellyfish: {
     label: "jellyfish",
@@ -112,6 +118,7 @@ export const PETS: Record<PetType, PetDefinition> = {
     frameMs: { idle: 800, heart: 700, drink: 800, work: 800 },
     preview: { x: 10, y: 14, w: 44, h: 38 },
     hitBox: PET_HIT_BOXES.jellyfish,
+    body: PET_BODY_BOXES.jellyfish,
   },
   dog: {
     label: "dog",
@@ -127,6 +134,7 @@ export const PETS: Record<PetType, PetDefinition> = {
     frameMs: { idle: 800, heart: 700, drink: 800, work: 700 },
     preview: { x: 14, y: 20, w: 40, h: 30 },
     hitBox: PET_HIT_BOXES.dog,
+    body: PET_BODY_BOXES.dog,
   },
 };
 

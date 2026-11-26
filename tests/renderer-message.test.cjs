@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { sendToRenderer } = require("../electron/renderer-message.cjs");
+const { sendToRenderer } = require("../electron/lib/renderer-message.cjs");
 
 function fakeSender({ destroyed = false, fail = false } = {}) {
   const sent = [];

@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { showNotification } = require("../electron/notifications.cjs");
+const { showNotification } = require("../electron/lib/notifications.cjs");
 
 function fakeNotifications({
   supported = true,

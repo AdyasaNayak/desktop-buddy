@@ -7,7 +7,7 @@ const {
   DEFAULT_ALWAYS_ON_TOP,
   readAlwaysOnTop,
   writeAlwaysOnTop,
-} = require("../electron/window-preferences.cjs");
+} = require("../electron/lib/window-preferences.cjs");
 
 test("always on top defaults on when there is no saved preference", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "buddy-preferences-"));

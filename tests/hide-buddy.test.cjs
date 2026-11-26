@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { hideBuddy } = require("../electron/hide-buddy.cjs");
+const { hideBuddy } = require("../electron/lib/hide-buddy.cjs");
 
 function fakeWindow({ destroyed = false, visible = true } = {}) {
   const calls = [];

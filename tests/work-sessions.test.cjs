@@ -11,7 +11,7 @@ const {
   resumePausedSession,
   workSessionEditError,
   workSessionsToCsv,
-} = require("../src/workSessions.ts");
+} = require("../src/lib/workSessions.ts");
 
 function openSession(overrides) {
   return {

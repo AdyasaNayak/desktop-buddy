@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { db, type WaterEntry, type WaterPlan } from "./db";
-import { dayKey } from "./time";
-import { WATER_HISTORY_LIMIT, recentWaterHistory } from "./waterHistory";
+import { db, type WaterEntry, type WaterPlan } from "../storage/db";
+import { dayKey } from "../lib/time";
+import { WATER_HISTORY_LIMIT, recentWaterHistory } from "../lib/waterHistory";
 import {
   DEFAULT_AMOUNT_ML,
   DEFAULT_INTERVAL_MINUTES,
   type WaterSettings,
-} from "./waterOptions";
-import { pickWaterMessage, waterNudgeNotice } from "./waterMessages";
+} from "../lib/waterOptions";
+import { pickWaterMessage, waterNudgeNotice } from "../lib/waterMessages";
 import {
   isWithinQuietHours,
   nextReminderAfterDismiss,
   nextReminderAfterQuietHours,
-} from "./waterSchedule";
+} from "../lib/waterSchedule";
 
 export interface WaterPrompt {
   message: string;
