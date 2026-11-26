@@ -14,8 +14,12 @@ import hamsterIdle from "./assets/hamster.png";
 import hamsterHeart from "./assets/hamsterheart.png";
 import hamsterDrink from "./assets/hamsterdrink.png";
 import hamsterWork from "./assets/hamsterwork.png";
+import jellyfishIdle from "./assets/jellyfish.png";
+import jellyfishHeart from "./assets/jellyfishheart.png";
+import jellyfishDrink from "./assets/jellyfishdrink.png";
+import jellyfishWork from "./assets/jellyfishwork.png";
 
-export type PetType = "cat" | "dog" | "star" | "hamster";
+export type PetType = "cat" | "dog" | "star" | "hamster" | "jellyfish";
 export type PetState = "idle" | "heart" | "drink" | "work";
 
 /** Every sheet is a horizontal strip of 64×64 frames. */
@@ -28,7 +32,16 @@ export interface PetDefinition {
   preview: { x: number; y: number; w: number; h: number };
 }
 
-export const PET_TYPES: PetType[] = ["cat", "dog", "star", "hamster"];
+export const PET_TYPES: PetType[] = ["cat", "dog", "star", "hamster", "jellyfish"];
+
+/** Sprite preview height in CSS pixels for picker tiles and the setup stage. */
+export const PET_PREVIEW_SIZE: Record<PetType, { card: number; stage: number }> = {
+  cat: { card: 52, stage: 88 },
+  dog: { card: 40, stage: 72 },
+  star: { card: 40, stage: 72 },
+  hamster: { card: 46, stage: 80 },
+  jellyfish: { card: 46, stage: 80 },
+};
 
 export const PETS: Record<PetType, PetDefinition> = {
   cat: {
@@ -85,9 +98,25 @@ export const PETS: Record<PetType, PetDefinition> = {
     frameMs: { idle: 800, heart: 700, drink: 800, work: 700 },
     preview: { x: 15, y: 19, w: 32, h: 32 },
   },
+  jellyfish: {
+    label: "jellyfish",
+    greeting: "blub!",
+    sheets: {
+      idle: jellyfishIdle,
+      heart: jellyfishHeart,
+      drink: jellyfishDrink,
+      work: jellyfishWork,
+    },
+    frameCount: { idle: 3, heart: 2, drink: 2, work: 3 },
+    // Kept between 1 and 2 fps so the jellyfish drifts calmly.
+    frameMs: { idle: 800, heart: 700, drink: 800, work: 800 },
+    preview: { x: 10, y: 14, w: 44, h: 38 },
+  },
 };
 
 /** Unknown or missing values fall back to the original cat. */
 export function toPetType(value: unknown): PetType {
-  return value === "dog" || value === "star" || value === "hamster" ? value : "cat";
+  return value === "dog" || value === "star" || value === "hamster" || value === "jellyfish"
+    ? value
+    : "cat";
 }

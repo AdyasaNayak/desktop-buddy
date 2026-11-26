@@ -1,13 +1,49 @@
-const { app, BrowserWindow, Notification, ipcMain } = require("electron");
+const { app, BrowserWindow, Notification, ipcMain, screen } = require("electron");
 const path = require("node:path");
+
+const PET_WINDOW = { width: 360, height: 260 };
+const SETUP_WINDOW = { width: 460, height: 600 };
 
 let sleepTimer;
 const reminderTimers = new Map();
+const windowModes = new WeakMap();
+const petWindowBounds = new WeakMap();
+
+function setupBounds(display) {
+  const area = display.workArea;
+  // never larger than the work area, so the setup card always fits on screen
+  const width = Math.min(SETUP_WINDOW.width, area.width - 32);
+  const height = Math.min(SETUP_WINDOW.height, area.height - 32);
+  return {
+    width,
+    height,
+    x: Math.round(area.x + (area.width - width) / 2),
+    y: Math.round(area.y + (area.height - height) / 2),
+  };
+}
+
+function clampToWorkArea(bounds) {
+  const area = screen.getDisplayMatching(bounds).workArea;
+  return {
+    ...bounds,
+    x: Math.min(Math.max(bounds.x, area.x), area.x + area.width - bounds.width),
+    y: Math.min(Math.max(bounds.y, area.y), area.y + area.height - bounds.height),
+  };
+}
+
+function setBuddyBounds(window, bounds) {
+  // setBounds is a programmatic resize; briefly lift the user-facing lock so
+  // platforms that enforce resizable=false here still apply the new size
+  const wasResizable = window.isResizable();
+  if (!wasResizable) window.setResizable(true);
+  window.setBounds(bounds, false);
+  if (!wasResizable) window.setResizable(false);
+}
 
 function createWindow() {
   const window = new BrowserWindow({
-    width: 360,
-    height: 260,
+    ...PET_WINDOW,
+    show: false,
     transparent: true,
     frame: false,
     alwaysOnTop: true,
@@ -20,6 +56,14 @@ function createWindow() {
       nodeIntegration: false,
     },
   });
+
+  // The renderer picks the window size once it knows whether this is a first
+  // launch. Show the window anyway if that never arrives (for example a
+  // renderer crash), so the app can't start invisible.
+  const revealTimer = setTimeout(() => {
+    if (!window.isDestroyed() && !window.isVisible()) window.show();
+  }, 4000);
+  window.on("closed", () => clearTimeout(revealTimer));
 
   if (app.isPackaged || process.argv.includes("--production")) {
     window.loadFile(path.join(__dirname, "..", "dist", "index.html"));
@@ -55,6 +99,36 @@ ipcMain.on("sleep-window", (event, duration) => {
 });
 
 ipcMain.on("exit-app", () => app.quit());
+
+ipcMain.on("window-mode", (event, mode) => {
+  const window = BrowserWindow.fromWebContents(event.sender);
+  if (!window || window.isDestroyed() || (mode !== "setup" && mode !== "pet")) return;
+
+  const bounds = window.getBounds();
+  if (mode === "setup") {
+    // remember where a visible buddy was so renaming can put it back
+    if (windowModes.get(window) === "pet") petWindowBounds.set(window, bounds);
+    setBuddyBounds(window, setupBounds(screen.getDisplayMatching(bounds)));
+  } else {
+    const saved = petWindowBounds.get(window);
+    petWindowBounds.delete(window);
+    const centerX = bounds.x + bounds.width / 2;
+    const centerY = bounds.y + bounds.height / 2;
+    setBuddyBounds(
+      window,
+      saved
+        ? clampToWorkArea(saved)
+        : {
+            ...PET_WINDOW,
+            x: Math.round(centerX - PET_WINDOW.width / 2),
+            y: Math.round(centerY - PET_WINDOW.height / 2),
+          },
+    );
+  }
+
+  windowModes.set(window, mode);
+  if (!window.isVisible()) window.show();
+});
 
 ipcMain.on("is-packaged", (event) => {
   event.returnValue = app.isPackaged;
